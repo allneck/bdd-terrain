@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#51449E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Base de données terrain</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Concept : carnet de chantier. Bandeau violet, onglets, filtres en puces, saisie rapide au clavier. */
+:root{
+  --bg:#F5F4FA; --surface:#FFFFFF; --ink:#1E1B33; --muted:#66638A; --line:#E2DFEF;
+  --accent:#51449E; --accent-ink:#FFFFFF; --accent-soft:#ECE9FA;
+  --abri:#51449E; --tgb:#17877B; --qual:#C26E14; --nonq:#6F83B3; --c3:#B0457A; --c4:#7A8B1F;
+  --good:#1E8E5A; --warn:#A8730F; --bad:#C0392B; --bad-soft:#FBEAE7;
+  --f-display:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif;
+  --f-body:"Public Sans","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#13111F; --surface:#1C1930; --ink:#ECEAF8; --muted:#A5A1C6; --line:#2F2B49;
+  --accent:#9A8FF0; --accent-ink:#13111F; --accent-soft:#2B2650;
+  --abri:#9A8FF0; --tgb:#3CC3B2; --qual:#E8A25C; --nonq:#8EA0CC; --c3:#E37DB0; --c4:#B7C95A;
+  --good:#4CC38A; --warn:#E0B04A; --bad:#EF7B6E; --bad-soft:#3A1F24; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#13111F; --surface:#1C1930; --ink:#ECEAF8; --muted:#A5A1C6; --line:#2F2B49;
+  --accent:#9A8FF0; --accent-ink:#13111F; --accent-soft:#2B2650;
+  --abri:#9A8FF0; --tgb:#3CC3B2; --qual:#E8A25C; --nonq:#8EA0CC; --c3:#E37DB0; --c4:#B7C95A;
+  --good:#4CC38A; --warn:#E0B04A; --bad:#EF7B6E; --bad-soft:#3A1F24; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+.wrap{max-width:1120px;margin:0 auto}
+header.top{margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:18px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));background:var(--accent);color:var(--accent-ink)}
+header.top .in{max-width:1120px;margin:0 auto}
+h1{font-family:var(--f-display);font-size:26px;line-height:1.15;margin:0;font-weight:700;text-wrap:balance}
+header.top p{margin:4px 0 0;font-size:13px;opacity:.85}
+nav.tabs{display:flex;gap:2px;overflow-x:auto;margin-top:14px;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs button{flex:0 0 auto;border:0;background:transparent;color:inherit;font:inherit;font-weight:600;padding:10px 14px;border-radius:8px 8px 0 0;cursor:pointer;opacity:.78;white-space:nowrap}
+nav.tabs button:hover{opacity:1}
+nav.tabs button[aria-selected="true"]{background:var(--bg);color:var(--accent);opacity:1}
+nav.tabs .sep{flex:0 0 1px;background:currentColor;opacity:.25;margin:8px 8px}
+main{padding-top:18px;display:grid;gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;min-width:0}
+.card h2{font-family:var(--f-display);font-size:16px;margin:0 0 12px;font-weight:600}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))}
+.kpis{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.kpi .l{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi .v{font-family:var(--f-display);font-size:26px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;margin-top:2px}
+.kpi .s{font-size:12px;color:var(--muted)}
+.filters{display:grid;gap:10px}
+.fg{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fg .fl{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);min-width:96px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;padding:4px 11px;border-radius:999px;cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.tag{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:3px 6px 3px 11px;font-size:13px;margin:0 6px 6px 0}
+.tag.der{opacity:.7;padding-right:11px}
+.tag button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px}
+.link{background:none;border:0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;padding:4px 6px}
+button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:3px}
+input,select{width:100%;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:7px;padding:8px 10px;min-height:38px}
+.form{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));align-items:end}
+.form .wide{grid-column:1/-1}
+.btn{font:inherit;font-weight:600;border-radius:7px;padding:9px 16px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;min-height:38px}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sm{padding:3px 9px;min-height:0;font-size:12px}
+.btn.plus{padding:0 12px;font-size:18px;line-height:1}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.nw{flex-wrap:nowrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:var(--surface);color:var(--ink);font:inherit;font-weight:600;padding:8px 16px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.hint{color:var(--muted);font-size:12px}
+.list{border:1px solid var(--line);border-radius:8px;max-height:300px;overflow:auto}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 12px;padding:8px 10px;border-bottom:1px solid var(--line);cursor:pointer;min-width:0}
+.item:last-child{border-bottom:0}
+.item:hover{background:var(--accent-soft)}
+.item[aria-selected="true"]{background:var(--accent-soft);box-shadow:inset 3px 0 var(--accent)}
+.item .n{font-weight:500;overflow-wrap:anywhere}
+.item .m{font-size:12px;color:var(--muted)}
+.item .r{text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
+.pill{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid currentColor}
+.pill.Encours{color:var(--muted)} .pill.FINIE{color:var(--good)} .pill.DEPASSE{color:var(--bad)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+td.wrapt{white-space:normal;min-width:180px}
+th{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+td.num,th.num{text-align:right}
+tr:last-child td{border-bottom:0}
+tr.open>td{background:var(--accent-soft)}
+tr.sub td{background:var(--bg);font-size:13px}
+.neg{color:var(--bad);font-weight:700}
+.bars{display:grid;gap:7px}
+.bar{display:grid;grid-template-columns:minmax(90px,38%) 1fr auto;gap:10px;align-items:center;font-size:13px}
+.bar .lab{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .tr{background:var(--accent-soft);border-radius:4px;height:14px;overflow:hidden}
+.bar .fi{height:100%;border-radius:4px;background:var(--accent)}
+.bar .vl{font-variant-numeric:tabular-nums;color:var(--muted)}
+svg.ch{width:100%;height:auto;display:block}
+svg.ch text{fill:var(--muted);font-size:11px;font-family:var(--f-body)}
+svg.ch line.g{stroke:var(--line)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.donutwrap{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.empty{padding:22px;text-align:center;color:var(--muted)}
+.banner{border:1px solid var(--warn);background:var(--surface);color:var(--ink);padding:10px 12px;border-radius:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.banner.ro{border-color:var(--line);color:var(--muted)}
+.banner.err{border-color:var(--bad);background:var(--bad-soft);font-weight:600}
+.stockhint{padding:9px 12px;border-radius:8px;background:var(--accent-soft);font-size:13px}
+.stockhint.bad{background:var(--bad-soft);color:var(--bad);font-weight:600}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;max-width:92vw}
+#toast.on{opacity:1}
+.sub{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.steps{display:grid;gap:14px}
+.prog{height:8px;border-radius:4px;background:var(--accent-soft);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent);width:0}
+#projbar{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#projbar select{width:auto;max-width:260px;font-weight:600;min-height:34px;padding:5px 10px}
+#projbar .btn{background:transparent;color:inherit;border-color:rgba(255,255,255,.55);min-height:34px;padding:5px 12px}
+#projbar .btn:hover{background:rgba(255,255,255,.14)}
+#projbar .pinfo{flex-basis:100%;font-size:12.5px;opacity:.9}
+.tagl{display:flex;flex-wrap:wrap;gap:0;margin-bottom:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+
+</head>
+<body>
+<header class="top"><div class="in">
+  <h1>Base de données terrain</h1>
+  <p>Matériel, livraisons, stock par projet et main d’œuvre · WASH Urgence</p>
+  <div id="projbar"></div>
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+</div></header>
+<div class="wrap"><main id="main"></main></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------- mode autonome (téléphone) : base locale + export ---------- */
+if(!window.claude){
+  window.LOCAL=true;
+  const mem={},subs=[];let idb=null;
+  const fire=n=>subs.filter(s=>s[0]===n).forEach(([_,cb])=>cb({docs:Object.entries(mem[n]||{}).map(([id,d])=>({id,data:()=>d}))}));
+  const put=(k,v)=>new Promise(res=>{if(!idb)return res();try{const tx=idb.transaction('docs','readwrite');v===undefined?tx.objectStore('docs').delete(k):tx.objectStore('docs').put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>res()}catch(e){res()}});
+  const ready=new Promise(res=>{try{const r=indexedDB.open('bdt-terrain',1);r.onupgradeneeded=()=>r.result.createObjectStore('docs');
+    r.onsuccess=()=>{idb=r.result;const c=idb.transaction('docs').objectStore('docs').openCursor();c.onsuccess=()=>{const cur=c.result;if(cur){const [n,id]=[cur.key.slice(0,cur.key.indexOf('/')),cur.key.slice(cur.key.indexOf('/')+1)];(mem[n]=mem[n]||{})[id]=cur.value;cur.continue()}else res()};c.onerror=()=>res()};r.onerror=()=>res()}catch(e){res()}});
+  const localDb={collection(name){const q={doc(id){return {set:async d=>{await ready;(mem[name]=mem[name]||{})[id]=JSON.parse(JSON.stringify(d));await put(name+'/'+id,mem[name][id]);fire(name)},delete:async()=>{await ready;if(mem[name])delete mem[name][id];await put(name+'/'+id,undefined);fire(name)}}},limit(){return q},onSnapshot(cb){subs.push([name,cb]);ready.then(()=>cb({docs:Object.entries(mem[name]||{}).map(([id,d])=>({id,data:()=>d}))}));return()=>{}}};return q}};
+  const dlSave=async({filename,data})=>{const blob=data instanceof Blob?data:new Blob([data],{type:/\.csv$/i.test(filename)?'text/csv;charset=utf-8':'application/octet-stream'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);return {status:'saved'}};
+  window.claude={use:async n=>n==='db'?localDb:n==='user'?{can:()=>true}:n==='downloads'?{save:dlSave}:null};
+  try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
+}
+const LIM=window.LOCAL?1e9:1000;
+const EMB={"P": [], "PARAM": [], "UNITS": []};
+const BASE_P=EMB.P, BASE_D=EMB.PARAM, UNITS0=EMB.UNITS;
+let P=[],PID={},DES=[],UNITS=[],UNITS_MO=[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nf=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:2});
+const nf0=new Intl.NumberFormat('fr-FR',{maximumFractionDigits:0});
+const fmt=v=>nf.format(v), fmt0=v=>nf0.format(v);
+const fdate=d=>d?String(d).split('-').reverse().join('/'):'';
+const pad=n=>String(n).padStart(2,'0');
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const newId=()=>'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const norm=s=>String(s??'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const dkey=s=>norm(s).replace(/\s+/g,' ').trim();
+const hash=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36)+s.length.toString(36)};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const COLLS=['mo','sorties','livraisons','postes','designations','fournisseurs','lieux','projets','ouvrages'];
+const S={can:true,db:null,dl:null,err:'',loaded:{},full:[]};
+COLLS.forEach(c=>S[c]=[]);S.raw={};S.wps=[];S.unites=[];S.dbRaw=null;
+const SCOPED=['mo','sorties','livraisons','postes','fournisseurs','lieux','projets','ouvrages'],PREF=['postes','fournisseurs','lieux','projets','ouvrages'];
+let WP='p0';try{WP=localStorage.getItem('wp')||'p0'}catch(e){}
+const scope=n=>(S.raw[n]||[]).filter(d=>(d.wp||'p0')===WP);
+const FQ={mo:{f:new Set(),q:new Set(),s:new Set(),m:new Set(),l:new Set()},mat:{o:new Set(),l:new Set(),m:new Set(),p:new Set()}};
+const NOPROJ='(sans projet)';
+const FORM={fourn:'',date:today(),search:'',sel:null,qty:'',basket:[],ask:false,adding:null,
+  so:{date:today(),store:'',waybill:'',des:'',unite:'',ouvrage:'',lieu:'',projet:'',qte:''},soErr:'',
+  li:{date:today(),bc:'',nom:'',projet:'',lieu:'',des:'',qte:'',unite:'',lines:[]},
+  fs:'',fl:'',stq:'',stP:'',open:new Set(),imp:null};
+let tab='mo-dashboard';
+const TABS=[['mo-dashboard','Main d’œuvre'],['materiel','Matériel'],['stock','Stock'],['|'],['saisie-mo','Saisir la main d’œuvre'],['saisie-sorties','Saisir une sortie'],['saisie-livraisons','Saisir une livraison'],['|'],['importer','Importer'],['listes','Listes'],['projet','Projet (enregistrer / vider)']];
+if(window.LOCAL)TABS.push(['|'],['sync','Synchroniser (Google Sheets)']);
+
+/* ---------- utilitaires ---------- */
+let tt;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),3200)}
+function digits(inp){const v=inp.value,c=v.replace(/[^0-9]/g,'');if(c!==v){inp.value=c;toast('Insérer uniquement les chiffres')}return c}
+function uniq(a){return [...new Set(a)].filter(x=>x!==''&&x!=null)}
+function sum(a,f){let s=0;for(const x of a)s+=f(x);return s}
+function groupBy(a,k){const m=new Map();for(const x of a){const key=k(x);if(!m.has(key))m.set(key,[]);m.get(key).push(x)}return m}
+function pass(set,v){return set.size===0||set.has(v)}
+function num(v){if(typeof v==='number')return v;const s=String(v??'').replace(/\s/g,'').replace(',','.');const n=parseFloat(s);return isNaN(n)?0:n}
+const PAL=['var(--abri)','var(--tgb)','var(--c3)','var(--c4)','var(--qual)','var(--nonq)'];
+function colF(f){const i=uniq(P.map(p=>p.f)).indexOf(f);return PAL[(i<0?0:i)%PAL.length]}
+
+/* ---------- données de référence (intégrées + ajoutées) ---------- */
+function rebuildRef(){
+  const m=new Map();if(WP==='p0')BASE_P.forEach(p=>m.set(p.id,{...p}));
+  S.postes.forEach(d=>m.set(d.id,{id:d.id,f:d.f,poste:d.poste,lin:d.lin||'',u:d.u||'',max:+d.max||0,prix:+d.prix||0,q:d.q||'Non Qualifié'}));
+  P=[...m.values()];PID={};P.forEach(p=>PID[p.id]=p);
+  const dm=new Map();BASE_D.forEach(x=>dm.set(dkey(x.d),{d:x.d,c:x.c||'',u:x.u||''}));
+  S.designations.forEach(x=>dm.set(dkey(x.d),{d:x.d,c:x.c||'',u:x.u||''}));
+  DES=[...dm.values()].sort((a,b)=>a.d.localeCompare(b.d,'fr'));
+  UNITS=unitList('mat');UNITS_MO=unitList('mo');
+}
+function unitList(type){
+  const reg=S.unites.filter(x=>x.type===type),hid=new Set(reg.filter(x=>x.hidden).map(x=>dkey(x.nom)));
+  const base=type==='mo'?P.map(p=>p.u):UNITS0.map(u=>u.trim()).concat(DES.map(x=>x.u),S.sorties.map(r=>r.unite),S.livraisons.map(r=>r.unite));
+  return uniq(reg.filter(x=>!x.hidden).map(x=>x.nom).concat(base.map(x=>String(x||'').trim()))).filter(n=>!hid.has(dkey(n))).sort((a,b)=>a.localeCompare(b,'fr'))}
+async function addUnit(type,nom){nom=String(nom||'').trim();if(!nom)return false;
+  try{await S.dbRaw.collection('unites').doc(type+'_'+slug(nom)).set({nom,type,ts:Date.now()});return true}catch(e){toast('Ajout impossible : '+(e.message||e.code));return false}}
+const DERIVED={fournisseurs:()=>S.livraisons.map(r=>r.nom),lieux:()=>S.sorties.map(r=>r.lieu).concat(S.livraisons.map(r=>r.lieu)),projets:()=>S.sorties.map(r=>r.projet).concat(S.livraisons.map(r=>r.projet)),ouvrages:()=>S.sorties.map(r=>r.ouvrage)};
+function names(kind){const hid=new Set(S[kind].filter(x=>x.hidden).map(x=>dkey(x.nom)));return uniq(S[kind].filter(x=>!x.hidden).map(x=>x.nom).concat(DERIVED[kind]().map(x=>String(x||'').trim()))).filter(n=>!hid.has(dkey(n))||S[kind].some(x=>!x.hidden&&dkey(x.nom)===dkey(n))).sort((a,b)=>a.localeCompare(b,'fr'))}
+function paramUnit(des){const k=dkey(des);const p=DES.find(x=>dkey(x.d)===k);return p?p.u:''}
+const slug=s=>dkey(s).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||hash(s);
+async function addToList(kind,nom){nom=String(nom||'').trim();if(!nom)return false;
+  try{await S.db.collection(kind).doc(slug(nom)).set({nom,ts:Date.now()});return true}catch(e){toast('Ajout impossible : '+(e.message||e.code));return false}}
+
+/* ---------- stock : livraisons moins sorties par projet, plus ancien lot d'abord ---------- */
+function computeStock(){
+  const lots=S.livraisons.filter(l=>l.des&&+l.qte>0).map(l=>({key:dkey(l.des),des:l.des,unite:l.unite||'',projet:l.projet||NOPROJ,nom:l.nom||'',bc:l.bc||l.prf||'',date:l.date||'',ts:l.ts||0,qte:+l.qte,rest:+l.qte}))
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.ts-b.ts);
+  const out=new Map();
+  S.sorties.filter(r=>r.projet&&+r.qte>0).forEach(r=>{const k=dkey(r.des)+'|'+r.projet;out.set(k,(out.get(k)||0)+ +r.qte)});
+  const art=new Map(),legacy=S.sorties.filter(r=>!r.projet).length;
+  const byKP=groupBy(lots,l=>l.key+'|'+l.projet);
+  for(const [kp,arr] of byKP){
+    let need=out.get(kp)||0;
+    for(const l of arr){const take=Math.min(l.rest,need);l.rest-=take;need-=take}
+    const over=need; // sorties au-delà des livraisons
+    const f=arr[0];
+    if(!art.has(f.key))art.set(f.key,{key:f.key,des:f.des,unite:f.unite,proj:{},lots:[]});
+    const a=art.get(f.key);a.proj[f.projet]=sum(arr,l=>l.rest)-over;a.lots.push(...arr);
+  }
+  const projets=uniq([...art.values()].flatMap(a=>Object.keys(a.proj))).sort();
+  art.forEach(a=>{a.total=sum(Object.values(a.proj),v=>v)});
+  return {art,projets,legacy,lots};
+}
+function availFor(st,des,projet){const a=st.art.get(dkey(des));return a&&a.proj[projet]!=null?a.proj[projet]:null}
+
+/* ---------- calculs main d'œuvre ---------- */
+function usedMap(){const m={};for(const e of S.mo)m[e.p]=(m[e.p]||0)+(+e.hj||0);return m}
+function statut(max,used){return used>max?'DEPASSE':used===max&&max>0?'FINIE':'Encours'}
+function moRows(){
+  const um=usedMap(),out=[];
+  for(const e of S.mo){const p=PID[e.p];if(!p)continue;
+    out.push({f:p.f,q:p.q,poste:p.poste,lin:p.lin||'(sans code)',s:statut(p.max,um[p.id]||0),date:e.date,m:(e.date||'').slice(0,7),hj:+e.hj||0,cout:(+e.hj||0)*p.prix,pid:p.id})}
+  return out}
+function moFiltered(){const F=FQ.mo;return moRows().filter(r=>pass(F.f,r.f)&&pass(F.q,r.q)&&pass(F.s,r.s)&&pass(F.m,r.m)&&pass(F.l,r.lin))}
+
+/* ---------- graphiques ---------- */
+function niceMax(v){if(v<=0)return 1;const e=Math.pow(10,Math.floor(Math.log10(v))),n=v/e;return (n<=1?1:n<=2?2:n<=5?5:10)*e}
+function colChart(labels,series,fm){
+  const W=640,H=230,L=48,R=8,T=10,B=34,n=labels.length;
+  if(!n)return '<div class="empty">Aucune donnée pour ces filtres</div>';
+  const tot=labels.map((_,i)=>sum(series,s=>s.vals[i]||0));
+  const mx=niceMax(Math.max(...tot)),pw=(W-L-R)/n,bw=Math.min(46,pw*.68);
+  let g='';
+  for(let k=0;k<=4;k++){const v=mx*k/4,y=T+(H-T-B)*(1-k/4);g+=`<line class="g" x1="${L}" x2="${W-R}" y1="${y}" y2="${y}"/><text x="${L-6}" y="${y+4}" text-anchor="end">${fm(v)}</text>`}
+  const step=Math.ceil(n/12);
+  labels.forEach((lb,i)=>{
+    let y0=H-B;const x=L+pw*i+(pw-bw)/2;
+    series.forEach(s=>{const v=s.vals[i]||0;if(v<=0)return;const h=(H-T-B)*v/mx;y0-=h;
+      g+=`<rect x="${x.toFixed(1)}" y="${y0.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(h,1).toFixed(1)}" rx="2" fill="${s.color}"><title>${esc(lb)} · ${esc(s.name)} : ${fm(v)}</title></rect>`});
+    if(i%step===0)g+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-B+15}" text-anchor="middle">${esc(lb)}</text>`});
+  const lg=series.length>1?`<div class="legend">${series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>`:'';
+  return `<svg class="ch" viewBox="0 0 ${W} ${H}" role="img">${g}</svg>${lg}`}
+function hbars(items,fm,color){
+  if(!items.length)return '<div class="empty">Aucune donnée pour ces filtres</div>';
+  const mx=Math.max(...items.map(i=>i.v))||1;
+  return `<div class="bars">${items.map(i=>`<div class="bar"><div class="lab" title="${esc(i.l)}">${esc(i.l)}</div><div class="tr"><div class="fi" style="width:${(100*i.v/mx).toFixed(1)}%;background:${i.c||color||'var(--accent)'}"></div></div><div class="vl">${fm(i.v)}</div></div>`).join('')}</div>`}
+function donut(items,fm){
+  const tot=sum(items,i=>i.v);if(tot<=0)return '<div class="empty">Aucune donnée pour ces filtres</div>';
+  const R=60,C=2*Math.PI*R;let off=0,arcs='';
+  items.forEach(i=>{const d=C*i.v/tot;arcs+=`<circle r="${R}" cx="80" cy="80" fill="none" stroke="${i.c}" stroke-width="26" stroke-dasharray="${d.toFixed(2)} ${(C-d).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 80 80)"><title>${esc(i.l)} : ${fm(i.v)}</title></circle>`;off+=d});
+  return `<div class="donutwrap"><svg viewBox="0 0 160 160" width="160" height="160" role="img">${arcs}<text x="80" y="84" text-anchor="middle" style="font-size:15px;font-weight:700;fill:var(--ink)">${fm(tot)}</text></svg><div class="legend" style="flex-direction:column;gap:6px;margin:0">${items.map(i=>`<span><i style="background:${i.c}"></i>${esc(i.l)} · ${fm(i.v)} (${Math.round(100*i.v/tot)} %)</span>`).join('')}</div></div>`}
+const COL_Q={'Qualifié':'var(--qual)','Non Qualifié':'var(--nonq)'};
+const colq=q=>COL_Q[q]||'var(--accent)';
+
+/* ---------- filtres (segments) ---------- */
+function chips(group,key,label,opts){
+  if(!opts.length)return '';
+  return `<div class="fg"><span class="fl">${label}</span>${opts.map(o=>`<button class="chip" data-g="${group}" data-k="${key}" data-v="${esc(o)}" aria-pressed="${FQ[group][key].has(o)}">${esc(o)}</button>`).join('')}</div>`}
+function wireChips(root,cb){
+  root.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const s=FQ[b.dataset.g][b.dataset.k],v=b.dataset.v;s.has(v)?s.delete(v):s.add(v);cb()});
+  root.querySelectorAll('[data-reset]').forEach(b=>b.onclick=()=>{Object.values(FQ[b.dataset.reset]).forEach(s=>s.clear());cb()})}
+function monthLabel(m){const [y,mo]=m.split('-');return ['janv.','févr.','mars','avr.','mai','juin','juil.','août','sept.','oct.','nov.','déc.'][+mo-1]+' '+y}
+
+/* ---------- tableau de bord main d'œuvre ---------- */
+function viewMoDash(){
+  const all=moRows(),F=FQ.mo,rows=moFiltered();
+  const opt=(k)=>uniq(all.map(r=>r[k])).sort();
+  const cout=sum(rows,r=>r.cout),hj=sum(rows,r=>r.hj),cq=sum(rows.filter(r=>r.q==='Qualifié'),r=>r.cout);
+  const um=usedMap();
+  const postes=P.filter(p=>pass(F.f,p.f)&&pass(F.q,p.q)&&pass(F.l,p.lin||'(sans code)')&&pass(F.s,statut(p.max,um[p.id]||0)));
+  const dep=postes.filter(p=>statut(p.max,um[p.id]||0)==='DEPASSE').length;
+  const byF=groupBy(rows,r=>r.f),byQ=groupBy(rows,r=>r.q);
+  const fournisseurs=uniq(P.map(p=>p.f));
+  const quals=uniq(P.map(p=>p.q)).sort().reverse();
+  const months=uniq(rows.map(r=>r.m)).sort();
+  const dates=uniq(rows.map(r=>r.date)).sort();
+  const top=[...groupBy(rows,r=>r.pid)].map(([id,a])=>({l:PID[id].poste,v:sum(a,r=>r.cout),c:colF(PID[id].f)})).sort((a,b)=>b.v-a.v).slice(0,10);
+  const synth=[];fournisseurs.forEach(f=>quals.forEach(q=>{const a=rows.filter(r=>r.f===f&&r.q===q);const np=postes.filter(p=>p.f===f&&p.q===q).length;if(a.length||np)synth.push({f,q,np,hj:sum(a,r=>r.hj),c:sum(a,r=>r.cout)})}));
+  return `
+  <div class="card filters">
+    ${chips('mo','f','Fournisseur',fournisseurs)}
+    ${chips('mo','q','Qualification',quals)}
+    ${chips('mo','s','Statut du poste',['Encours','FINIE','DEPASSE'])}
+    ${chips('mo','m','Mois',uniq(all.map(r=>r.m)).sort())}
+    <div class="fg"><span class="fl">Code LIN</span><select id="linSel" style="max-width:260px"><option value="">Tous les codes</option>${opt('lin').map(l=>`<option ${F.l.has(l)?'selected':''}>${esc(l)}</option>`).join('')}</select>
+      <button class="link" data-reset="mo">Tout effacer</button></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Coût utilisé (USD)</div><div class="v">${fmt(cout)}</div><div class="s">hommes-jours × prix unitaire</div></div>
+    <div class="kpi"><div class="l">Hommes-jours</div><div class="v">${fmt0(hj)}</div><div class="s">${rows.length} saisie(s)</div></div>
+    <div class="kpi"><div class="l">Coût moyen / H-J</div><div class="v">${hj?fmt(cout/hj):'0'}</div><div class="s">USD</div></div>
+    <div class="kpi"><div class="l">Part du coût qualifié</div><div class="v">${cout?Math.round(100*cq/cout):0} %</div><div class="s">${fmt(cq)} USD</div></div>
+    <div class="kpi"><div class="l">Postes dépassés</div><div class="v" style="color:${dep?'var(--bad)':'var(--good)'}">${dep}</div><div class="s">sur ${postes.length} postes</div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h2>Coût par fournisseur et qualification (USD)</h2>${colChart(fournisseurs.filter(f=>byF.has(f)),quals.map(q=>({name:q,color:colq(q),vals:fournisseurs.filter(f=>byF.has(f)).map(f=>sum(rows.filter(r=>r.f===f&&r.q===q),r=>r.cout))})),fmt0)}</div>
+    <div class="card"><h2>Coût par mois (USD)</h2>${colChart(months.map(monthLabel),fournisseurs.map(f=>({name:f,color:colF(f),vals:months.map(m=>sum(rows.filter(r=>r.f===f&&r.m===m),r=>r.cout))})),fmt0)}</div>
+    <div class="card"><h2>Hommes-jours par date</h2>${colChart(dates.map(d=>fdate(d).slice(0,5)),fournisseurs.map(f=>({name:f,color:colF(f),vals:dates.map(d=>sum(rows.filter(r=>r.f===f&&r.date===d),r=>r.hj))})),fmt0)}</div>
+    <div class="card"><h2>Répartition du coût par qualification</h2>${donut(quals.map(q=>({l:q,v:sum(byQ.get(q)||[],r=>r.cout),c:colq(q)})).filter(i=>i.v>0),fmt0)}</div>
+    <div class="card"><h2>10 postes les plus coûteux (USD)</h2>${hbars(top,fmt0)}<div class="legend">${fournisseurs.map(f=>`<span><i style="background:${colF(f)}"></i>${esc(f)}</span>`).join('')}</div></div>
+    <div class="card"><h2>Synthèse par fournisseur et qualification</h2><div class="tablewrap"><table><thead><tr><th>Fournisseur</th><th>Qualification</th><th class="num">Postes</th><th class="num">H-J</th><th class="num">Coût (USD)</th><th class="num">Moyenne / H-J</th></tr></thead><tbody>
+      ${synth.map(s=>`<tr><td>${esc(s.f)}</td><td>${esc(s.q)}</td><td class="num">${s.np}</td><td class="num">${fmt0(s.hj)}</td><td class="num">${fmt(s.c)}</td><td class="num">${s.hj?fmt(s.c/s.hj):'–'}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">Aucune donnée</td></tr>'}
+      </tbody></table></div></div>
+  </div>`}
+
+/* ---------- tableau de bord matériel ---------- */
+function matFiltered(){const F=FQ.mat;return S.sorties.filter(r=>pass(F.o,r.ouvrage)&&pass(F.l,r.lieu)&&pass(F.m,(r.date||'').slice(0,7))&&pass(F.p,r.projet||NOPROJ))}
+function viewMateriel(){
+  const all=S.sorties,rows=matFiltered();
+  const cnt=(k)=>[...groupBy(rows,k)].map(([l,a])=>({l:l||'(vide)',v:a.length})).sort((a,b)=>b.v-a.v);
+  const topArt=[...groupBy(rows,r=>r.des+'|'+r.unite)].map(([k,a])=>({l:a[0].des+' ('+(a[0].unite||'u')+')',v:sum(a,r=>+r.qte||0)})).sort((a,b)=>b.v-a.v).slice(0,10);
+  const months=uniq(rows.map(r=>(r.date||'').slice(0,7))).sort();
+  const projs=uniq(all.map(r=>r.projet||NOPROJ)).sort();
+  return `
+  <div class="card filters">
+    ${chips('mat','p','Projet',projs.length>1?projs:[])}
+    ${chips('mat','o','Ouvrage',uniq(all.map(r=>r.ouvrage)).sort())}
+    ${chips('mat','l','Lieu',uniq(all.map(r=>r.lieu)).sort())}
+    ${chips('mat','m','Mois',uniq(all.map(r=>(r.date||'').slice(0,7))).sort())}
+    <div class="fg"><button class="link" data-reset="mat">Tout effacer</button></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="l">Lignes de sortie</div><div class="v">${fmt0(rows.length)}</div></div>
+    <div class="kpi"><div class="l">Articles différents</div><div class="v">${uniq(rows.map(r=>r.des)).length}</div></div>
+    <div class="kpi"><div class="l">Bons de sortie</div><div class="v">${uniq(rows.map(r=>r.waybill)).length}</div><div class="s">waybills</div></div>
+    <div class="kpi"><div class="l">Lieux servis</div><div class="v">${uniq(rows.map(r=>r.lieu)).length}</div></div>
+    <div class="kpi"><div class="l">Livraisons reçues</div><div class="v">${fmt0(S.livraisons.length)}</div><div class="s">lignes enregistrées</div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h2>Lignes de sortie par ouvrage</h2>${hbars(cnt(r=>r.ouvrage),fmt0)}</div>
+    <div class="card"><h2>Lignes de sortie par lieu</h2>${hbars(cnt(r=>r.lieu),fmt0)}</div>
+    <div class="card"><h2>Sorties par mois (lignes)</h2>${colChart(months.map(monthLabel),[{name:'Lignes',color:'var(--accent)',vals:months.map(m=>rows.filter(r=>(r.date||'').slice(0,7)===m).length)}],fmt0)}</div>
+    <div class="card"><h2>10 articles les plus sortis (quantité)</h2>${hbars(topArt,fmt0)}</div>
+  </div>`}
+
+/* ---------- stock ---------- */
+function stockRows(){
+  const st=computeStock(),q=dkey(FORM.stq);
+  const arts=[...st.art.values()].filter(a=>(!q||a.key.includes(q))&&(!FORM.stP||a.proj[FORM.stP]!=null)).sort((a,b)=>a.des.localeCompare(b.des,'fr'));
+  return {st,arts}}
+function viewStock(){
+  const {st,arts}=stockRows();
+  const cols=FORM.stP?[FORM.stP]:st.projets;
+  const zero=arts.filter(a=>a.total<=0).length;
+  return `
+  <div class="kpis">
+    <div class="kpi"><div class="l">Articles suivis</div><div class="v">${st.art.size}</div></div>
+    <div class="kpi"><div class="l">Lots livrés</div><div class="v">${st.lots.length}</div><div class="s">fournisseur + bon de commande</div></div>
+    <div class="kpi"><div class="l">Projets</div><div class="v">${st.projets.length}</div></div>
+    <div class="kpi"><div class="l">Articles épuisés</div><div class="v" style="color:${zero?'var(--warn)':'var(--good)'}">${zero}</div></div>
+  </div>
+  <div class="card">
+    <div class="sub"><h2 style="margin:0">Stock par article et par projet</h2><div class="row"><input id="stQ" placeholder="Chercher un article…" value="${esc(FORM.stq)}" style="width:220px"><button class="btn sm" id="stExp">Exporter en CSV</button></div></div>
+    ${st.projets.length?`<div class="fg" style="margin-bottom:10px"><span class="fl">Projet</span><button class="chip" data-sp="" aria-pressed="${!FORM.stP}">Tous</button>${st.projets.map(p=>`<button class="chip" data-sp="${esc(p)}" aria-pressed="${FORM.stP===p}">${esc(p)}</button>`).join('')}</div>`:''}
+    ${arts.length?`<div class="tablewrap"><table><thead><tr><th>Article</th><th>Unité</th><th class="num">Total en stock</th>${cols.map(p=>`<th class="num">${esc(p)}</th>`).join('')}<th></th></tr></thead><tbody>
+    ${arts.map(a=>{const open=FORM.open.has(a.key);const tot=FORM.stP?a.proj[FORM.stP]:a.total;
+      return `<tr class="${open?'open':''}"><td class="wrapt">${esc(a.des)}</td><td>${esc(a.unite)}</td><td class="num ${tot<0?'neg':''}"><b>${fmt(tot)}</b></td>${cols.map(p=>`<td class="num ${a.proj[p]<0?'neg':''}">${a.proj[p]==null?'–':fmt(a.proj[p])}</td>`).join('')}<td><button class="btn sm" data-open="${esc(a.key)}">${open?'Masquer':'Lots'}</button></td></tr>
+      ${open?`<tr class="sub"><td colspan="${cols.length+4}"><div class="tablewrap"><table><thead><tr><th>Date</th><th>Fournisseur</th><th>Bon de commande</th><th>Projet</th><th class="num">Livré</th><th class="num">Restant</th></tr></thead><tbody>${a.lots.filter(l=>!FORM.stP||l.projet===FORM.stP).map(l=>`<tr><td>${fdate(l.date)}</td><td>${esc(l.nom)}</td><td>${esc(l.bc)}</td><td>${esc(l.projet)}</td><td class="num">${fmt(l.qte)}</td><td class="num">${fmt(l.rest)}</td></tr>`).join('')}</tbody></table></div></td></tr>`:''}`}).join('')}
+    </tbody></table></div>`:'<div class="empty">Aucun stock pour l’instant. Le stock se remplit avec les livraisons (onglet « Saisir une livraison » ou « Importer »).</div>'}
+    <p class="hint" style="margin:10px 0 0">Stock = livraisons − sorties du même projet. ${st.legacy?st.legacy+' ancienne(s) sortie(s) sans projet ne sont pas déduites. ':''}Une sortie prend d’abord le lot le plus ancien.</p>
+  </div>`}
+function wireStock(root){
+  const q=$('#stQ');q.oninput=()=>{FORM.stq=q.value;const p=q.selectionStart;render();const n=$('#stQ');n.focus();n.setSelectionRange(p,p)};
+  root.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>{FORM.stP=b.dataset.sp;render()});
+  root.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>{const k=b.dataset.open;FORM.open.has(k)?FORM.open.delete(k):FORM.open.add(k);render()});
+  $('#stExp').onclick=()=>{const {st,arts}=stockRows();exportCsv('stock.csv',['Article','Unite','Projet','Fournisseur','Bon de commande','Date livraison','Livre','Restant'],arts.flatMap(a=>a.lots.map(l=>[a.des,a.unite,l.projet,l.nom,l.bc,l.date,l.qte,l.rest])))}}
+
+/* ---------- champs avec liste + ajout ---------- */
+function selAdd(id,label,kind,value){
+  const list=names(kind);if(value&&!list.includes(value))list.push(value);
+  return `<div><label for="${id}">${label}</label><div class="row nw"><select id="${id}"><option value="">Choisir…</option>${list.map(n=>`<option ${n===value?'selected':''}>${esc(n)}</option>`).join('')}</select><button class="btn plus" data-add="${kind}:${id}" title="Ajouter à la liste" aria-label="Ajouter à la liste ${label}">+</button></div></div>`}
+function addRow(){
+  if(!FORM.adding)return '';
+  return `<div class="banner" style="margin-top:12px"><label for="addNom" style="margin:0">Nouveau « ${esc(FORM.adding.kind.slice(0,-1))} » :</label><input id="addNom" style="max-width:260px"><button class="btn pri sm" id="addOk">Ajouter</button><button class="btn sm" id="addNo">Annuler</button></div>`}
+function wireAdd(root,onPick){
+  root.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{const [kind,id]=b.dataset.add.split(':');FORM.adding={kind,id};render();$('#addNom').focus()});
+  const ok=$('#addOk');if(!ok)return;
+  const go=async()=>{const nom=$('#addNom').value.trim();if(!nom)return;const {kind,id}=FORM.adding;
+    if(await addToList(kind,nom)){onPick(id,nom);FORM.adding=null;toast('« '+nom+' » ajouté à la liste');render()}};
+  ok.onclick=go;$('#addNom').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}};
+  $('#addNo').onclick=()=>{FORM.adding=null;render()}}
+
+/* ---------- formulaire main d'œuvre ---------- */
+function viewSaisieMo(){
+  const FM=uniq(P.map(p=>p.f));if(!FM.includes(FORM.fourn))FORM.fourn=FM[0]||'';
+  const um=usedMap(),list=P.filter(p=>p.f===FORM.fourn);
+  const words=norm(FORM.search).split(/\s+/).filter(Boolean);
+  const shown=list.filter(p=>words.every(w=>norm(p.poste).includes(w)||norm(p.lin).includes(w)));
+  const sel=FORM.sel&&PID[FORM.sel]&&PID[FORM.sel].f===FORM.fourn?PID[FORM.sel]:null;
+  let info='';
+  if(sel){const u=um[sel.id]||0,d=sum(S.mo.filter(e=>e.p===sel.id&&e.date===FORM.date),e=>+e.hj||0);info=`Déjà saisi le ${fdate(FORM.date)} : <b>${fmt(d)}</b> · Restant : <b>${fmt(sel.max-u)}</b> ${esc(sel.u)}`}
+  const over=FORM.basket.filter(b=>(um[b.pid]||0)+b.hj>PID[b.pid].max).map(b=>PID[b.pid].poste);
+  return `
+  ${S.can?'':'<div class="banner ro">Vous pouvez consulter les données, mais pas en saisir. Demandez un accès contributeur au propriétaire.</div>'}
+  <div class="card"><h2>Main d’œuvre du jour</h2>
+    <div class="form">
+      <div><label>Fournisseur</label><div class="seg" id="fSeg">${FM.map(f=>`<button data-f="${esc(f)}" aria-pressed="${FORM.fourn===f}">${esc(f)}</button>`).join('')}</div></div>
+      <div><label for="mDate">Date</label><input type="date" id="mDate" value="${FORM.date}"></div>
+      <div class="wide"><label for="mSearch">Rechercher un poste (quelques mots, Entrée = choisir le premier)</label><input id="mSearch" value="${esc(FORM.search)}" autocomplete="off" placeholder="ex. maçon KASINGA"></div>
+    </div>
+    <div class="list" id="mList" style="margin-top:10px" role="listbox" aria-label="Postes">
+      ${shown.map(p=>{const u=um[p.id]||0,s=statut(p.max,u);return `<div class="item" role="option" tabindex="0" data-id="${esc(p.id)}" aria-selected="${sel&&sel.id===p.id}"><div class="n">${esc(p.poste)}</div><div class="r">${fmt(u)} / ${fmt(p.max)} <span class="pill ${s}">${s}</span></div><div class="m">${esc(p.q)}${p.lin?' · '+esc(p.lin):''} · ${esc(p.u)} · ${fmt(p.prix)} USD</div><div></div></div>`}).join('')||'<div class="empty">Aucun poste ne correspond. Ajoutez-en dans « Listes » ou « Importer ».</div>'}
+    </div>
+    <div class="form" style="margin-top:12px">
+      <div class="wide hint" id="mInfo">${info||'Choisissez un poste dans la liste.'}</div>
+      <div><label for="mQty">Nombre (hommes-jours)</label><input id="mQty" inputmode="numeric" autocomplete="off" value="${esc(FORM.qty)}"></div>
+      <div><button class="btn pri" id="mAdd" ${S.can?'':'disabled'}>Ajouter à la liste</button></div>
+    </div>
+  </div>
+  <div class="card"><h2>À enregistrer (${FORM.basket.length})</h2>
+    ${FORM.basket.length?`<div class="tablewrap"><table><tbody>${FORM.basket.map((b,i)=>`<tr><td class="wrapt">${esc(PID[b.pid].poste)}</td><td class="num">${fmt(b.hj)}</td><td><button class="btn sm" data-rm="${i}">Retirer</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="hint">Rien pour l’instant.</div>'}
+    ${FORM.ask?`<div class="banner" style="margin-top:10px"><span>Dépassement de la quantité prévue pour : ${esc(over.join(' ; '))}</span><button class="btn pri sm" id="mForce">Enregistrer quand même</button><button class="btn sm" id="mCancelAsk">Annuler</button></div>`:''}
+    <div class="row" style="margin-top:12px"><button class="btn pri" id="mSave" ${S.can&&FORM.basket.length?'':'disabled'}>Enregistrer tout</button><button class="btn" id="mClear" ${FORM.basket.length?'':'disabled'}>Vider la liste</button></div>
+  </div>
+  <div class="card"><div class="sub"><h2 style="margin:0">Dernières saisies</h2><button class="btn sm" id="mExp">Exporter en CSV</button></div>${entriesTable(S.mo.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.ts||0)-(a.ts||0)).slice(0,25).map(e=>({id:e.id,cells:[fdate(e.date),e.f,(PID[e.p]||{}).poste||e.p,fmt(e.hj)]})),['Date','Fournisseur','Poste','H-J'],'mo')}</div>`}
+function entriesTable(rows,heads,coll){
+  if(!rows.length)return '<div class="empty">Aucune saisie</div>';
+  return `<div class="tablewrap"><table><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}<th></th></tr></thead><tbody>${rows.map(r=>`<tr>${r.cells.map(c=>`<td class="${String(c).length>28?'wrapt':''}">${esc(c)}</td>`).join('')}<td>${S.can?`<button class="btn sm" data-del="${coll}:${r.id}">Supprimer</button>`:''}</td></tr>`).join('')}</tbody></table></div>`}
+function wireSaisieMo(root){
+  root.querySelectorAll('#fSeg button').forEach(b=>b.onclick=()=>{if(FORM.fourn===b.dataset.f)return;
+    if(FORM.basket.length&&FORM._okSwitch!==b.dataset.f){FORM._okSwitch=b.dataset.f;toast('Changer de fournisseur vide la liste. Touchez à nouveau pour confirmer.');return}
+    FORM.fourn=b.dataset.f;FORM.basket=[];FORM.sel=null;FORM._okSwitch=null;FORM.ask=false;render()});
+  const d=$('#mDate');d.onchange=()=>{FORM.date=d.value||today();render()};
+  const s=$('#mSearch');s.oninput=()=>{FORM.search=s.value;const pos=s.selectionStart;render();const n=$('#mSearch');n.focus();n.setSelectionRange(pos,pos)};
+  s.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();const f=document.querySelector('#mList .item');if(f){FORM.sel=f.dataset.id;render();$('#mQty').focus()}}};
+  root.querySelectorAll('#mList .item').forEach(it=>{const pick=()=>{FORM.sel=it.dataset.id;render();$('#mQty').focus()};it.onclick=pick;it.onkeydown=e=>{if(e.key==='Enter')pick()}});
+  const q=$('#mQty');q.oninput=()=>{FORM.qty=digits(q)};q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#mAdd').click()}};
+  $('#mAdd').onclick=()=>{
+    if(!FORM.sel){toast('Choisissez d’abord un poste.');return}
+    const n=parseInt(FORM.qty,10);if(!n||n<=0){toast('Saisissez un nombre supérieur à 0.');q.focus();return}
+    const ex=FORM.basket.find(b=>b.pid===FORM.sel);ex?ex.hj+=n:FORM.basket.push({pid:FORM.sel,hj:n});
+    FORM.qty='';FORM.search='';FORM.sel=null;FORM.ask=false;render();$('#mSearch').focus()};
+  root.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{FORM.basket.splice(+b.dataset.rm,1);FORM.ask=false;render()});
+  $('#mClear').onclick=()=>{FORM.basket=[];FORM.ask=false;render()};
+  const save=async force=>{
+    const um=usedMap();const over=FORM.basket.some(b=>(um[b.pid]||0)+b.hj>PID[b.pid].max);
+    if(over&&!force){FORM.ask=true;render();return}
+    const items=FORM.basket.slice();FORM.basket=[];FORM.ask=false;
+    try{for(const b of items){await S.db.collection('mo').doc(newId()).set({p:b.pid,f:PID[b.pid].f,date:FORM.date,hj:b.hj,ts:Date.now()})}
+      toast(items.length+' ligne(s) enregistrée(s) pour le '+fdate(FORM.date))}
+    catch(e){FORM.basket=items;toast('Enregistrement impossible : '+(e.message||e.code));}
+    render()};
+  $('#mSave').onclick=()=>save(false);
+  const f=$('#mForce');if(f)f.onclick=()=>save(true);
+  const c=$('#mCancelAsk');if(c)c.onclick=()=>{FORM.ask=false;render()};
+  $('#mExp').onclick=()=>exportCsv('main-oeuvre.csv',['Date','Fournisseur','Qualification','Poste','Code LIN','Hommes-jours','Prix unitaire','Cout'],S.mo.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(e=>{const p=PID[e.p]||{};return [e.date,e.f,p.q,p.poste,p.lin,e.hj,p.prix,(e.hj*(p.prix||0)).toFixed(2)]}))}
+
+/* ---------- formulaire sorties (par projet, avec contrôle du stock) ---------- */
+function soHint(){
+  const f=FORM.so,st=computeStock();
+  if(!f.des||!f.projet)return {t:'Choisissez l’article et le projet pour voir le stock disponible.',bad:false};
+  const a=st.art.get(dkey(f.des));const av=availFor(st,f.des,f.projet);
+  if(av==null)return {t:'Aucune livraison enregistrée pour cet article sur le projet « '+f.projet+' ». Enregistrez d’abord la livraison.',bad:true};
+  const u=a.unite||f.unite||'';
+  const lots=a.lots.filter(l=>l.projet===f.projet&&l.rest>0);
+  const other=Object.entries(a.proj).filter(([p,v])=>p!==f.projet&&v>0).map(([p,v])=>p+' : '+fmt(v)).join(' · ');
+  const q=parseInt(f.qte,10)||0;
+  let t=`Stock pour « ${f.projet} » : ${fmt(av)} ${u}.`;
+  if(lots.length){const l=lots[0];t+=` Sera pris d’abord sur : ${l.nom||'fournisseur ?'}${l.bc?', bon de commande '+l.bc:''}.`}
+  if(other)t+=` Autres projets : ${other}.`;
+  return {t,bad:q>av};}
+function updHint(){const h=$('#sHint');if(!h)return;const x=soHint();h.textContent=x.t;h.className='stockhint'+(x.bad?' bad':'')}
+function viewSaisieSorties(){
+  const f=FORM.so,q=norm(FORM.fs),h=soHint();
+  const rows=S.sorties.filter(r=>!q||norm([r.des,r.lieu,r.ouvrage,r.store,r.waybill,r.projet].join(' ')).includes(q)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.ts||0)-(a.ts||0));
+  return `
+  ${S.can?'':'<div class="banner ro">Lecture seule : la saisie demande un accès contributeur.</div>'}
+  <div class="card"><h2>Nouvelle sortie de matériel</h2>
+    ${FORM.soErr?`<div class="banner err" role="alert" style="margin-bottom:12px">${esc(FORM.soErr)}</div>`:''}
+    <div class="form">
+      <div><label for="sDate">Date</label><input type="date" id="sDate" value="${f.date}"></div>
+      <div><label for="sStore">Référence Store</label><input id="sStore" inputmode="numeric" value="${esc(f.store)}" autocomplete="off"></div>
+      <div><label for="sWay">Référence Waybill</label><input id="sWay" inputmode="numeric" value="${esc(f.waybill)}" autocomplete="off"></div>
+      ${selAdd('sProj','Projet qui supporte la sortie','projets',f.projet)}
+      <div class="wide"><label for="sDes">Désignation</label><input id="sDes" list="dlDes" value="${esc(f.des)}" autocomplete="off" placeholder="Tapez pour chercher dans la liste des désignations"></div>
+      <div><label for="sUni">Unité (automatique)</label><input id="sUni" list="dlUni" value="${esc(f.unite)}"></div>
+      <div><label for="sQte">Quantité</label><input id="sQte" inputmode="numeric" value="${esc(f.qte)}" autocomplete="off"></div>
+      ${selAdd('sOuv','Ouvrage','ouvrages',f.ouvrage)}
+      ${selAdd('sLieu','Lieu','lieux',f.lieu)}
+      <div class="wide"><div id="sHint" class="stockhint${h.bad?' bad':''}">${esc(h.t)}</div></div>
+    </div>
+    <datalist id="dlDes">${DES.map(p=>`<option value="${esc(p.d)}">`).join('')}</datalist>
+    <datalist id="dlUni">${UNITS.map(u=>`<option value="${esc(u)}">`).join('')}</datalist>
+    ${addRow()}
+    <div class="row" style="margin-top:14px"><button class="btn pri" id="sSave" ${S.can?'':'disabled'}>Enregistrer</button><button class="btn" id="sCancel">Annuler</button><span class="hint">Après l’enregistrement, la date, les références, le projet, l’ouvrage et le lieu restent pour saisir l’article suivant.</span></div>
+  </div>
+  <div class="card"><div class="sub"><h2 style="margin:0">Sorties enregistrées (${rows.length})</h2><div class="row"><input id="sFilt" placeholder="Filtrer…" value="${esc(FORM.fs)}" style="width:200px"><button class="btn sm" id="sExp">Exporter en CSV</button></div></div>
+  ${entriesTable(rows.slice(0,60).map(r=>({id:r.id,cells:[fdate(r.date),r.store,r.waybill,r.des,r.projet||'',r.ouvrage,r.lieu,r.qte+' '+(r.unite||'')]})),['Date','Store','Waybill','Désignation','Projet','Ouvrage','Lieu','Quantité'],'sorties')}
+  ${rows.length>60?'<div class="hint" style="margin-top:8px">60 premières lignes affichées sur '+rows.length+'. Utilisez le filtre ou l’export CSV.</div>':''}</div>`}
+function wireSaisieSorties(root){
+  const f=FORM.so;
+  const clr=()=>{if(FORM.soErr){FORM.soErr='';const b=document.querySelector('.banner.err');if(b)b.remove()}};
+  const bind=(id,k,dig)=>{const el=$(id);el.oninput=()=>{f[k]=dig?digits(el):el.value;clr();if(k==='des'){const u=paramUnit(f.des);if(u){f.unite=u;$('#sUni').value=u}}if(k==='des'||k==='qte')updHint()}};
+  const sel=(id,k)=>{const el=$(id);el.onchange=()=>{f[k]=el.value;clr();updHint()}};
+  $('#sDate').onchange=()=>{f.date=$('#sDate').value};
+  bind('#sStore','store',true);bind('#sWay','waybill',true);bind('#sQte','qte',true);bind('#sDes','des');bind('#sUni','unite');
+  sel('#sProj','projet');sel('#sOuv','ouvrage');sel('#sLieu','lieu');
+  wireAdd(root,(id,nom)=>{const k={sProj:'projet',sOuv:'ouvrage',sLieu:'lieu'}[id];if(k)f[k]=nom});
+  $('#sCancel').onclick=()=>{Object.assign(FORM.so,{date:today(),store:'',waybill:'',des:'',unite:'',ouvrage:'',lieu:'',projet:'',qte:''});FORM.soErr='';render()};
+  $('#sSave').onclick=async()=>{
+    if(!f.date){toast('Choisissez la date.');return}
+    if(!f.projet){toast('Choisissez le projet qui supporte la sortie.');$('#sProj').focus();return}
+    if(!f.des.trim()){toast('Choisissez la désignation.');$('#sDes').focus();return}
+    const n=parseInt(f.qte,10);if(!n||n<=0){toast('Saisissez une quantité supérieure à 0.');$('#sQte').focus();return}
+    const st=computeStock(),av=availFor(st,f.des,f.projet),art=st.art.get(dkey(f.des)),u=(art&&art.unite)||f.unite||'';
+    if(av==null||n>av){
+      FORM.soErr=av==null?`Sortie refusée : aucune livraison enregistrée pour « ${f.des.trim()} » sur le projet « ${f.projet} ».`:`Sortie refusée : sur cet item, il ne reste que ${fmt(av)} ${u} pour le projet « ${f.projet} » (demandé : ${fmt(n)}).`;
+      render();window.scrollTo({top:0,behavior:'smooth'});return}
+    try{
+      if(!DES.some(x=>dkey(x.d)===dkey(f.des)))await S.db.collection('designations').doc('d'+hash(dkey(f.des))).set({d:f.des.trim(),c:'',u:f.unite||''});
+      await S.db.collection('sorties').doc(newId()).set({date:f.date,store:f.store,waybill:f.waybill,des:f.des.trim(),unite:f.unite,ouvrage:f.ouvrage,qte:n,lieu:f.lieu,projet:f.projet,ts:Date.now()});
+      toast('Sortie enregistrée. Reste : '+fmt(av-n)+' '+u);f.des='';f.unite='';f.qte='';FORM.soErr='';render();$('#sDes').focus()}
+    catch(e){toast('Enregistrement impossible : '+(e.message||e.code))}};
+  const fi=$('#sFilt');fi.oninput=()=>{FORM.fs=fi.value;const p=fi.selectionStart;render();const n=$('#sFilt');n.focus();n.setSelectionRange(p,p)};
+  $('#sExp').onclick=()=>exportCsv('sorties.csv',['Date','Reference Store','Reference Waybill','Designation','Unite','Projet','Ouvrage','Quantite','Lieu'],S.sorties.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(r=>[r.date,r.store,r.waybill,r.des,r.unite,r.projet||'',r.ouvrage,r.qte,r.lieu]))}
+
+/* ---------- formulaire livraisons (fournisseur, bon de commande, projet) ---------- */
+function viewSaisieLivraisons(){
+  const f=FORM.li,q=norm(FORM.fl);
+  const rows=S.livraisons.filter(r=>!q||norm([r.des,r.nom,r.bc,r.prf,r.lieu,r.projet].join(' ')).includes(q)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.ts||0)-(a.ts||0));
+  return `
+  ${S.can?'':'<div class="banner ro">Lecture seule : la saisie demande un accès contributeur.</div>'}
+  <div class="card"><h2>Nouvelle livraison reçue</h2>
+    <div class="form">
+      <div><label for="lDate">Date de livraison</label><input type="date" id="lDate" value="${f.date}"></div>
+      <div><label for="lBc">N° de bon de commande</label><input id="lBc" value="${esc(f.bc)}" autocomplete="off"></div>
+      ${selAdd('lNom','Fournisseur','fournisseurs',f.nom)}
+      ${selAdd('lProj','Projet qui supporte le coût','projets',f.projet)}
+      ${selAdd('lLieu','Lieu de livraison','lieux',f.lieu)}
+    </div>
+    ${addRow()}
+    <h2 style="margin:18px 0 8px;font-size:14px">Articles de cette livraison</h2>
+    <div class="form">
+      <div class="wide"><label for="lDes">Désignation</label><input id="lDes" list="dlDes" value="${esc(f.des)}" autocomplete="off" placeholder="Tapez pour chercher dans la liste des désignations"></div>
+      <div><label for="lQte">Quantité</label><input id="lQte" inputmode="numeric" value="${esc(f.qte)}" autocomplete="off"></div>
+      <div><label for="lUni">Unité (automatique)</label><input id="lUni" list="dlUni" value="${esc(f.unite)}"></div>
+      <div><button class="btn pri" id="lAdd">Ajouter l’article</button></div>
+    </div>
+    <datalist id="dlDes">${DES.map(p=>`<option value="${esc(p.d)}">`).join('')}</datalist>
+    <datalist id="dlUni">${UNITS.map(u=>`<option value="${esc(u)}">`).join('')}</datalist>
+    ${f.lines.length?`<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>Désignation</th><th class="num">Quantité</th><th>Unité</th><th></th></tr></thead><tbody>${f.lines.map((l,i)=>`<tr><td class="wrapt">${esc(l.des)}</td><td class="num">${fmt(l.qte)}</td><td>${esc(l.unite)}</td><td><button class="btn sm" data-lrm="${i}">Retirer</button></td></tr>`).join('')}</tbody></table></div>`:''}
+    <div class="row" style="margin-top:14px"><button class="btn pri" id="lSave" ${S.can&&f.lines.length?'':'disabled'}>Enregistrer la livraison (${f.lines.length} article${f.lines.length>1?'s':''})</button><button class="btn" id="lCancel">Annuler</button><span class="hint">Beaucoup d’articles dans un fichier ? Utilisez l’onglet « Importer ».</span></div>
+  </div>
+  <div class="card"><div class="sub"><h2 style="margin:0">Livraisons enregistrées (${rows.length})</h2><div class="row"><input id="lFilt" placeholder="Filtrer…" value="${esc(FORM.fl)}" style="width:200px"><button class="btn sm" id="lExp">Exporter en CSV</button></div></div>
+  ${entriesTable(rows.slice(0,60).map(r=>({id:r.id,cells:[fdate(r.date),r.bc||r.prf||'',r.nom||'',r.projet||'',r.des,r.lieu||'',r.qte+' '+(r.unite||'')]})),['Date','Bon de commande','Fournisseur','Projet','Désignation','Lieu','Quantité'],'livraisons')}</div>`}
+function wireSaisieLivraisons(root){
+  const f=FORM.li;
+  $('#lDate').onchange=()=>{f.date=$('#lDate').value};
+  $('#lBc').oninput=()=>{f.bc=$('#lBc').value};
+  [['#lNom','nom'],['#lProj','projet'],['#lLieu','lieu']].forEach(([id,k])=>{$(id).onchange=()=>{f[k]=$(id).value}});
+  wireAdd(root,(id,nom)=>{const k={lNom:'nom',lProj:'projet',lLieu:'lieu'}[id];if(k)f[k]=nom});
+  const des=$('#lDes');des.oninput=()=>{f.des=des.value;const u=paramUnit(f.des);if(u){f.unite=u;$('#lUni').value=u}};
+  $('#lUni').oninput=()=>{f.unite=$('#lUni').value};
+  const qt=$('#lQte');qt.oninput=()=>{f.qte=digits(qt)};qt.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();$('#lAdd').click()}};
+  $('#lAdd').onclick=()=>{
+    if(!f.des.trim()){toast('Choisissez la désignation.');des.focus();return}
+    const n=parseInt(f.qte,10);if(!n||n<=0){toast('Saisissez une quantité supérieure à 0.');qt.focus();return}
+    f.lines.push({des:f.des.trim(),qte:n,unite:f.unite});f.des='';f.qte='';f.unite='';render();$('#lDes').focus()};
+  root.querySelectorAll('[data-lrm]').forEach(b=>b.onclick=()=>{f.lines.splice(+b.dataset.lrm,1);render()});
+  $('#lCancel').onclick=()=>{Object.assign(FORM.li,{date:today(),bc:'',nom:'',projet:'',lieu:'',des:'',qte:'',unite:'',lines:[]});render()};
+  $('#lSave').onclick=async()=>{
+    if(!f.nom){toast('Choisissez le fournisseur.');$('#lNom').focus();return}
+    if(!f.projet){toast('Choisissez le projet qui supporte le coût.');$('#lProj').focus();return}
+    const items=f.lines.slice();f.lines=[];
+    try{for(const l of items){
+        if(!DES.some(x=>dkey(x.d)===dkey(l.des)))await S.db.collection('designations').doc('d'+hash(dkey(l.des))).set({d:l.des,c:'',u:l.unite||''});
+        await S.db.collection('livraisons').doc(newId()).set({date:f.date,bc:f.bc,nom:f.nom,projet:f.projet,lieu:f.lieu,des:l.des,qte:l.qte,unite:l.unite,ts:Date.now()})}
+      toast(items.length+' article(s) livré(s) enregistré(s). Le stock est à jour.')}
+    catch(e){f.lines=items;toast('Enregistrement impossible : '+(e.message||e.code))}
+    render()};
+  const fi=$('#lFilt');fi.oninput=()=>{FORM.fl=fi.value;const p=fi.selectionStart;render();const n=$('#lFilt');n.focus();n.setSelectionRange(p,p)};
+  $('#lExp').onclick=()=>exportCsv('livraisons.csv',['Date','Bon de commande','Fournisseur','Projet','Designation','Quantite','Unite','Lieu'],S.livraisons.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(r=>[r.date,r.bc||r.prf||'',r.nom,r.projet||'',r.des,r.qte,r.unite,r.lieu]))}
+
+/* ---------- listes (fournisseurs, projets, lieux, ouvrages, postes MO, désignations) ---------- */
+function viewListes(){
+  const sec=(kind,title,hint)=>{const all=names(kind);const arm=FORM.armClr===kind;
+    return `<div class="card"><h2>${title}</h2><div>${all.map(n=>`<span class="tag">${esc(n)}${S.can?`<button data-lrem="${kind}" data-n="${esc(n)}" aria-label="Supprimer ${esc(n)}" title="Supprimer de la liste">×</button>`:''}</span>`).join('')||'<span class="hint">Liste vide.</span>'}</div>
+      <div class="row" style="margin-top:8px"><input id="ln_${kind}" placeholder="Nouveau…" style="max-width:260px" ${S.can?'':'disabled'}><button class="btn pri sm" data-ladd="${kind}" ${S.can?'':'disabled'}>Ajouter</button>${all.length&&S.can?`<button class="btn sm" data-lclr="${kind}">${arm?'Confirmer : tout effacer':'Tout effacer'}</button>`:''}</div><div class="hint" style="margin-top:6px">${hint} Supprimer un nom ne touche pas à l’historique des sorties et livraisons.</div></div>`};
+  const LP=FORM.lp||(FORM.lp={f:'',lin:'',poste:'',q:'Non Qualifié',u:'',max:'',prix:''}),LD=FORM.ld||(FORM.ld={d:'',c:'',u:''});
+  const usec=(type,title,hint)=>{const all=type==='mo'?UNITS_MO:UNITS;
+    return `<div class="card"><h2>${title}</h2><div>${all.map(n=>`<span class="tag">${esc(n)}${S.can?`<button data-urem="${type}" data-n="${esc(n)}" aria-label="Retirer ${esc(n)}" title="Retirer de la liste">×</button>`:''}</span>`).join('')||'<span class="hint">Liste vide.</span>'}</div>
+      <div class="row" style="margin-top:8px"><input id="un_${type}" placeholder="Nouvelle unité (ex. Homme-jour)" style="max-width:260px" ${S.can?'':'disabled'}><button class="btn pri sm" data-uaddl="${type}" ${S.can?'':'disabled'}>Ajouter l’unité</button></div><div class="hint" style="margin-top:6px">${hint}</div></div>`};
+  const uaRow=FORM.ua?`<div class="banner"><label for="uaNom" style="margin:0">Nouvelle unité de ${FORM.ua.type==='mo'?'main d’œuvre':'matériel'} :</label><input id="uaNom" style="max-width:240px" placeholder="ex. ${FORM.ua.type==='mo'?'Homme-jour':'Sac'}"><button class="btn pri sm" id="uaOk">Ajouter</button><button class="btn sm" id="uaNo">Annuler</button></div>`:'';
+  return `${uaRow}<div class="grid g2">
+  ${usec('mo','Unités de main d’œuvre','Homme-jour, Personne, Jour… Elles servent pour les postes de main d’œuvre.')}
+  ${usec('mat','Unités de matériel','Sac, Barre, Pièce… Elles servent pour les désignations, sorties et livraisons.')}
+  </div>
+  <div class="grid g2">
+  ${sec('fournisseurs','Fournisseurs de livraison','Les noms en grisé viennent des livraisons déjà saisies.')}
+  ${sec('projets','Projets','Le projet qui supporte le coût d’une livraison et d’une sortie.')}
+  ${sec('lieux','Lieux','')}
+  ${sec('ouvrages','Ouvrages','')}
+  </div>
+  <div class="card"><h2>Ajouter un poste de main d’œuvre</h2>
+    <div class="form">
+      <div><label for="pF">Fournisseur</label><input id="pF" list="dlFm" value="${esc(LP.f)}" autocomplete="off"><datalist id="dlFm">${uniq(P.map(p=>p.f)).map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
+      <div><label for="pLin">Code LIN</label><input id="pLin" value="${esc(LP.lin)}"></div>
+      <div class="wide"><label for="pPoste">Poste</label><input id="pPoste" value="${esc(LP.poste)}" autocomplete="off"></div>
+      <div><label for="pQ">Qualification</label><select id="pQ"><option ${LP.q==='Qualifié'?'selected':''}>Qualifié</option><option ${LP.q==='Non Qualifié'?'selected':''}>Non Qualifié</option></select></div>
+      <div><label for="pU">Unité (main d’œuvre)</label><div class="row nw"><select id="pU"><option value="">Choisir…</option>${(LP.u&&!UNITS_MO.includes(LP.u)?UNITS_MO.concat([LP.u]):UNITS_MO).map(u=>`<option ${u===LP.u?'selected':''}>${esc(u)}</option>`).join('')}</select><button class="btn plus" data-uadd="mo:pU" title="Ajouter une unité" aria-label="Ajouter une unité de main d’œuvre">+</button></div></div>
+      <div><label for="pMax">Jours prévus</label><input id="pMax" inputmode="numeric" value="${esc(LP.max)}"></div>
+      <div><label for="pPrix">Prix unitaire (USD)</label><input id="pPrix" inputmode="decimal" value="${esc(LP.prix)}"></div>
+      <div><button class="btn pri" id="pAdd" ${S.can?'':'disabled'}>Ajouter le poste</button></div>
+    </div><div class="hint" style="margin-top:8px">${P.length} postes au total. Pour en ajouter beaucoup, utilisez « Importer ».</div></div>
+  <div class="card"><h2>Ajouter une désignation (matériel)</h2>
+    <div class="form">
+      <div class="wide"><label for="dD">Désignation</label><input id="dD" value="${esc(LD.d)}" autocomplete="off"></div>
+      <div><label for="dC">Catégorie</label><input id="dC" value="${esc(LD.c)}"></div>
+      <div><label for="dU">Unité (matériel)</label><div class="row nw"><select id="dU"><option value="">Choisir…</option>${(LD.u&&!UNITS.includes(LD.u)?UNITS.concat([LD.u]):UNITS).map(u=>`<option ${u===LD.u?'selected':''}>${esc(u)}</option>`).join('')}</select><button class="btn plus" data-uadd="mat:dU" title="Ajouter une unité" aria-label="Ajouter une unité de matériel">+</button></div></div>
+      <div><button class="btn pri" id="dAdd" ${S.can?'':'disabled'}>Ajouter la désignation</button></div>
+    </div><div class="hint" style="margin-top:8px">${DES.length} désignations, communes aux sorties et aux livraisons.</div></div>`}
+function wireListes(root){
+  root.querySelectorAll('[data-ladd]').forEach(b=>{const k=b.dataset.ladd,i=$('#ln_'+k);const go=async()=>{if(await addToList(k,i.value)){toast('Ajouté');i.value=''}};b.onclick=go;i.onkeydown=e=>{if(e.key==='Enter')go()}});
+  root.querySelectorAll('[data-lrem]').forEach(b=>b.onclick=async()=>{const k=b.dataset.lrem,n=b.dataset.n;try{await S.db.collection(k).doc(slug(n)).set({nom:n,hidden:true,ts:Date.now()});toast('« '+n+' » retiré de la liste')}catch(e){toast('Suppression impossible')}});
+  root.querySelectorAll('[data-lclr]').forEach(b=>b.onclick=async()=>{const k=b.dataset.lclr;if(FORM.armClr!==k){FORM.armClr=k;render();return}
+    FORM.armClr=null;const items=names(k).map(n=>({c:k,id:slug(n),d:{nom:n,hidden:true,ts:Date.now()}}));await writeMany(items,()=>{});toast('Liste vidée');render()});
+  root.querySelectorAll('[data-uaddl]').forEach(b=>{const k=b.dataset.uaddl,i=$('#un_'+k);const go=async()=>{if(await addUnit(k,i.value)){toast('Unité ajoutée');i.value=''}};b.onclick=go;i.onkeydown=e=>{if(e.key==='Enter')go()}});
+  root.querySelectorAll('[data-urem]').forEach(b=>b.onclick=async()=>{const k=b.dataset.urem,n=b.dataset.n;try{await S.dbRaw.collection('unites').doc(k+'_'+slug(n)).set({nom:n,type:k,hidden:true,ts:Date.now()});toast('« '+n+' » retirée')}catch(e){toast('Suppression impossible')}});
+  root.querySelectorAll('[data-uadd]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.uadd.split(':');FORM.ua={type,id};render();const n=$('#uaNom');if(n)n.focus()});
+  const uo=$('#uaOk');if(uo){const go=async()=>{const nom=$('#uaNom').value.trim();if(!nom)return;const {type,id}=FORM.ua;if(await addUnit(type,nom)){(id==='pU'?FORM.lp:FORM.ld).u=nom;FORM.ua=null;toast('Unité « '+nom+' » ajoutée');render()}};uo.onclick=go;$('#uaNom').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}};$('#uaNo').onclick=()=>{FORM.ua=null;render()}}
+  const LP=FORM.lp,LD=FORM.ld;
+  [['#pF','f'],['#pLin','lin'],['#pPoste','poste'],['#pQ','q'],['#pU','u'],['#pMax','max'],['#pPrix','prix']].forEach(([id,k])=>{const el=$(id);el.oninput=el.onchange=()=>{LP[k]=el.value}});
+  [['#dD','d'],['#dC','c'],['#dU','u']].forEach(([id,k])=>{const el=$(id);el.oninput=()=>{LD[k]=el.value}});
+  $('#pAdd').onclick=async()=>{
+    if(!LP.f.trim()||!LP.poste.trim()){toast('Indiquez le fournisseur et le poste.');return}
+    const key=LP.f.trim().toLowerCase()+'|'+dkey(LP.poste);const ex=P.find(p=>p.f.toLowerCase()+'|'+dkey(p.poste)===key);
+    const id=ex?ex.id:'I'+hash(key);
+    try{await S.db.collection('postes').doc(id).set({f:LP.f.trim(),lin:LP.lin.trim(),poste:LP.poste.trim(),q:LP.q,u:LP.u.trim(),max:num(LP.max),prix:num(LP.prix),ts:Date.now()});
+      if(LP.u.trim()&&!UNITS_MO.some(x=>dkey(x)===dkey(LP.u)))await addUnit('mo',LP.u);
+      toast(ex?'Poste mis à jour':'Poste ajouté');Object.assign(LP,{lin:'',poste:'',max:'',prix:''});render()}catch(e){toast('Ajout impossible : '+(e.message||e.code))}};
+  $('#dAdd').onclick=async()=>{
+    if(!LD.d.trim()){toast('Indiquez la désignation.');return}
+    try{await S.db.collection('designations').doc('d'+hash(dkey(LD.d))).set({d:LD.d.trim(),c:LD.c.trim(),u:LD.u.trim()});if(LD.u.trim()&&!UNITS.some(x=>dkey(x)===dkey(LD.u)))await addUnit('mat',LD.u);toast('Désignation enregistrée');Object.assign(LD,{d:'',c:''});render()}catch(e){toast('Ajout impossible : '+(e.message||e.code))}}}
+
+/* ---------- import Excel / CSV ---------- */
+const IMP={
+  postes:{title:'Postes de main d’œuvre',req:['poste'],fields:[
+    ['f','Fournisseur',['fournisseur','entreprise','supplier']],['lin','Code LIN',['lin codes','code lin','lin','code']],
+    ['poste','Poste',['description des elements','nom et poste','poste','designation','description']],['q','Qualification',['qualification']],
+    ['u','Unité',['unite']],['max','Jours prévus',['jours prevus','nombre de jours','quantite max','jours prevu','prevu','hommes jours','quantite']],['prix','Prix unitaire',['prix unitaire','prix','cout unitaire','taux']]],
+    hint:'Une ligne par poste. Colonnes : fournisseur, code LIN, poste, qualification, unité, jours prévus, prix unitaire.'},
+  designations:{title:'Désignations (matériel)',req:['d'],fields:[['d','Désignation',['designation','description','article','item','materiel']],['c','Catégorie',['categorie','category']],['u','Unité',['unites','unite']]],
+    hint:'Une ligne par article. Colonnes : désignation, catégorie, unité. Cette liste est commune aux sorties et aux livraisons.'},
+  livraisons:{title:'Livraisons',req:['des','qte'],fields:[
+    ['date','Date',['date de livraison','date']],['bc','Bon de commande',['bon de commande','numero de commande','n bc','bc','po','reference prf','prf','commande']],
+    ['nom','Fournisseur',['nom du fournisseur','fournisseur','supplier']],['projet','Projet',['projet','project']],['des','Désignation',['designation','description','article','item']],
+    ['qte','Quantité',['quantite livree','quantite','qte','qty']],['unite','Unité',['unite']],['lieu','Lieu',['lieu de livraison','lieu','site']]],
+    hint:'Une ligne par article livré. Le fournisseur, le bon de commande, le projet, le lieu et la date peuvent être donnés une seule fois pour tout le lot (cadre « Valeurs communes »).'},
+  sorties:{title:'Sorties de matériel',req:['des','qte','date'],fields:[
+    ['date','Date',['date']],['store','Référence Store',['reference store','ref store','store']],['waybill','Référence Waybill',['reference waybill','ref waybill','waybill']],
+    ['des','Désignation',['designation','description','article']],['unite','Unité',['unite']],['ouvrage','Ouvrage',['ouvrages','ouvrage']],
+    ['qte','Quantité',['quantite consommee','quantite','qte']],['lieu','Lieu',['lieux','lieu']],['projet','Projet',['projet','project']]],
+    hint:'Les sorties importées avec un projet sont déduites du stock ; sans projet, elles ne le sont pas.'}};
+function parseCsv(t){
+  t=t.replace(/^﻿/,'');const first=t.split(/\r?\n/)[0]||'';
+  const d=[';','\t',','].map(c=>[c,first.split(c).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=[];let r=[],c='',q=false;
+  for(let i=0;i<t.length;i++){const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){c+='"';i++}else q=false}else c+=ch}
+    else if(ch==='"')q=true;else if(ch===d){r.push(c);c=''}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;r.push(c);c='';rows.push(r);r=[]}
+    else c+=ch}
+  if(c!==''||r.length){r.push(c);rows.push(r)}
+  return rows}
+async function readSheets(file){
+  const n=file.name.toLowerCase();
+  if(/\.(csv|txt)$/.test(n))return {CSV:parseCsv(await file.text())};
+  if(!window.XLSX)throw new Error('La lecture des fichiers Excel n’est pas disponible (connexion). Enregistrez le fichier en CSV et réessayez.');
+  const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});const out={};
+  wb.SheetNames.forEach(s=>{out[s]=XLSX.utils.sheet_to_json(wb.Sheets[s],{header:1,raw:true,defval:''})});return out}
+function hn(s){return norm(s).replace(/[^a-z0-9]+/g,' ').trim()}
+function autoMap(rows,type){
+  const def=IMP[type];let best={score:-1,h:0,map:{}};
+  for(let h=0;h<Math.min(rows.length,30);h++){
+    const heads=(rows[h]||[]).map(hn),used=new Set(),map={};
+    for(const pass2 of [0,1])for(const [k,,al] of def.fields){if(map[k]!=null)continue;
+      for(const a of al){const j=heads.findIndex((x,i)=>!used.has(i)&&x&&(pass2?x.includes(a):x===a));if(j>=0){map[k]=j;used.add(j);break}}}
+    const sc=Object.keys(map).length+(def.req.every(k=>map[k]!=null)?5:0);
+    if(sc>best.score)best={score:sc,h,map}}
+  return best}
+function pDate(v){
+  if(v instanceof Date&&!isNaN(v)){const d=new Date(v.getTime()+60000);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+  if(typeof v==='number'&&v>20000&&v<80000){const d=new Date(Math.round((v-25569)*86400000));return d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1)+'-'+pad(d.getUTCDate())}
+  const s=String(v||'').trim();let m;
+  if(m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))return m[1]+'-'+pad(+m[2])+'-'+pad(+m[3]);
+  if(m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/)){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+pad(+m[2])+'-'+pad(+m[1])}
+  return ''}
+function normQual(v){const s=norm(v);if(!s.trim())return 'Non Qualifié';if(/non|sans/.test(s))return 'Non Qualifié';if(/qualif/.test(s))return 'Qualifié';return String(v).trim()}
+function buildRecs(){
+  const I=FORM.imp,def=IMP[I.type],rows=I.rows.slice(I.h+1),M=I.map,D=I.def||{},recs=[],bad=[],seen=new Set();
+  const g=(r,k)=>M[k]!=null?r[M[k]]:'';
+  rows.forEach((r,i)=>{
+    if(!r||r.every(x=>String(x??'').trim()===''))return;
+    const T=k=>String(g(r,k)??'').trim();
+    if(I.type==='postes'){
+      const poste=T('poste'),f=T('f')||D.f||'';if(!poste){bad.push(i);return}
+      if(!f){bad.push(i);return}
+      const key=f.toLowerCase()+'|'+dkey(poste);if(seen.has(key)){bad.push(i);return}seen.add(key);
+      const ex=P.find(p=>p.f.toLowerCase()+'|'+dkey(p.poste)===key);
+      recs.push({c:'postes',id:ex?ex.id:'I'+hash(key),upd:!!ex,d:{f,lin:T('lin'),poste,q:normQual(T('q')),u:T('u'),max:num(g(r,'max')),prix:num(g(r,'prix')),ts:Date.now()},show:[f,T('lin'),poste,normQual(T('q')),T('u'),num(g(r,'max')),num(g(r,'prix'))]})}
+    else if(I.type==='designations'){
+      const d=T('d');if(!d){bad.push(i);return}const key=dkey(d);if(seen.has(key)){bad.push(i);return}seen.add(key);
+      recs.push({c:'designations',id:'d'+hash(key),upd:DES.some(x=>dkey(x.d)===key),d:{d,c:T('c'),u:T('u')},show:[d,T('c'),T('u')]})}
+    else if(I.type==='livraisons'){
+      const des=T('des'),q=num(g(r,'qte'));if(!des||q<=0){bad.push(i);return}
+      const dt=pDate(g(r,'date'))||D.date||today();
+      const rec={date:dt,bc:T('bc')||D.bc||'',nom:T('nom')||D.nom||'',projet:T('projet')||D.projet||'',lieu:T('lieu')||D.lieu||'',des,qte:q,unite:T('unite')||paramUnit(des),ts:Date.now()+i};
+      recs.push({c:'livraisons',id:newId(),d:rec,show:[fdate(rec.date),rec.bc,rec.nom,rec.projet,des,q,rec.unite]})}
+    else{
+      const des=T('des'),q=num(g(r,'qte')),dt=pDate(g(r,'date'));if(!des||q<=0||!dt){bad.push(i);return}
+      const rec={date:dt,store:T('store'),waybill:T('waybill'),des,unite:T('unite')||paramUnit(des),ouvrage:T('ouvrage'),qte:q,lieu:T('lieu'),projet:T('projet')||D.projet||'',ts:Date.now()+i};
+      recs.push({c:'sorties',id:newId(),d:rec,show:[fdate(dt),des,rec.projet,rec.ouvrage,rec.lieu,q,rec.unite]})}});
+  return {recs,bad}}
+const SHOWH={postes:['Fournisseur','LIN','Poste','Qualif.','Unité','Jours','Prix'],designations:['Désignation','Catégorie','Unité'],livraisons:['Date','Bon de commande','Fournisseur','Projet','Désignation','Qté','Unité'],sorties:['Date','Désignation','Projet','Ouvrage','Lieu','Qté','Unité']};
+function viewImporter(){
+  if(!FORM.imp)FORM.imp={type:'livraisons',def:{}};
+  const I=FORM.imp,def=IMP[I.type];
+  let body='';
+  if(I.rows){
+    const {recs,bad}=buildRecs();I._recs=recs;
+    const sheetSel=I.sheets&&Object.keys(I.sheets).length>1?`<div><label for="iSheet">Feuille du classeur</label><select id="iSheet">${Object.keys(I.sheets).map(s=>`<option ${s===I.sheet?'selected':''}>${esc(s)}</option>`).join('')}</select></div>`:'';
+    const heads=I.rows[I.h]||[];
+    const miss=def.req.filter(k=>I.map[k]==null&&!(I.type==='postes'&&k==='poste'?false:false));
+    body=`<div class="card"><h2>2. Vérifier les colonnes</h2>
+      <div class="form">${sheetSel}${def.fields.map(([k,lb])=>`<div><label for="im_${k}">${lb}${def.req.includes(k)?' *':''}</label><select id="im_${k}" data-k="${k}"><option value="">(aucune)</option>${heads.map((h,j)=>`<option value="${j}" ${I.map[k]===j?'selected':''}>${esc(String(h).slice(0,40)||'Colonne '+(j+1))}</option>`).join('')}</select></div>`).join('')}</div></div>
+    <div class="card"><h2>3. Contrôler et importer</h2>
+      ${miss.length?`<div class="banner err">Colonne obligatoire non trouvée : ${miss.map(k=>def.fields.find(f=>f[0]===k)[1]).join(', ')}. Choisissez-la ci-dessus.</div>`:''}
+      <p style="margin:0 0 10px"><b>${recs.length}</b> ligne(s) prête(s) à importer${recs.filter(r=>r.upd).length?`, dont <b>${recs.filter(r=>r.upd).length}</b> mise(s) à jour d’un élément existant`:''}. ${bad.length?`<span class="neg">${bad.length} ligne(s) ignorée(s)</span> (champ obligatoire vide ou doublon).`:''}</p>
+      ${recs.length?`<div class="tablewrap"><table><thead><tr>${SHOWH[I.type].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${recs.slice(0,8).map(r=>`<tr>${r.show.map(c=>`<td class="${String(c).length>30?'wrapt':''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div><div class="hint" style="margin-top:6px">Aperçu des 8 premières lignes.</div>`:''}
+      <div class="row" style="margin-top:12px"><button class="btn pri" id="iGo" ${S.can&&recs.length&&!miss.length&&!I.busy?'':'disabled'}>Importer ${recs.length} ligne(s)</button><button class="btn" id="iReset">Choisir un autre fichier</button></div>
+      <div id="iProg" style="margin-top:10px" ${I.busy?'':'hidden'}><div class="prog"><i id="iBar"></i></div><div class="hint" id="iTxt"></div></div></div>`}
+  const defs=I.type==='livraisons'?`<div class="card"><h2>Valeurs communes à tout le lot</h2><div class="hint" style="margin-bottom:8px">Utilisées quand le fichier n’a pas la colonne correspondante. L’aperçu ci-dessous se met à jour au prochain changement de colonne ; l’import utilise toujours ces valeurs.</div><div class="form">
+      <div><label for="dfDate">Date de livraison</label><input type="date" id="dfDate" value="${I.def.date||''}"></div>
+      <div><label for="dfBc">N° de bon de commande</label><input id="dfBc" value="${esc(I.def.bc||'')}"></div>
+      <div><label for="dfNom">Fournisseur</label><input id="dfNom" list="dl_dfNom" value="${esc(I.def.nom||'')}" autocomplete="off" placeholder="Choisir ou taper un nouveau nom"><datalist id="dl_dfNom">${names('fournisseurs').map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
+      <div><label for="dfProj">Projet</label><input id="dfProj" list="dl_dfProj" value="${esc(I.def.projet||'')}" autocomplete="off" placeholder="Choisir ou taper un nouveau nom"><datalist id="dl_dfProj">${names('projets').map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div>
+      <div><label for="dfLieu">Lieu</label><input id="dfLieu" list="dl_dfLieu" value="${esc(I.def.lieu||'')}" autocomplete="off" placeholder="Choisir ou taper un nouveau nom"><datalist id="dl_dfLieu">${names('lieux').map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div></div></div>`
+    :I.type==='sorties'?`<div class="card"><h2>Valeurs communes</h2><div class="form"><div><label for="dfProj">Projet</label><input id="dfProj" list="dl_dfProj" value="${esc(I.def.projet||'')}" autocomplete="off" placeholder="Choisir ou taper un nouveau nom"><datalist id="dl_dfProj">${names('projets').map(n=>`<option value="${esc(n)}">`).join('')}</datalist></div></div></div>`
+    :I.type==='postes'?`<div class="card"><h2>Valeurs communes</h2><div class="form"><div><label for="dfF">Fournisseur (si absent du fichier)</label><input id="dfF" list="dlFm2" value="${esc(I.def.f||'')}"><datalist id="dlFm2">${uniq(P.map(p=>p.f)).map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div></div></div>`:'';
+  return `
+  ${S.can?'':'<div class="banner ro">Lecture seule : l’import demande un accès contributeur.</div>'}
+  <div class="card"><h2>1. Que voulez-vous importer ?</h2>
+    <div class="seg" id="iType">${Object.entries(IMP).map(([k,v])=>`<button data-t="${k}" aria-pressed="${I.type===k}">${v.title}</button>`).join('')}</div>
+    <p class="hint" style="margin:10px 0">${def.hint}</p>
+    <div class="row"><input type="file" id="iFile" accept=".xlsx,.xls,.csv,.txt" style="max-width:360px"><button class="btn sm" id="iTpl">Télécharger un modèle CSV</button></div>
+    ${I.err?`<div class="banner err" style="margin-top:10px">${esc(I.err)}</div>`:''}
+    <p class="hint" style="margin:10px 0 0">Fichiers Excel (.xlsx, .xls) et CSV. Pour un PDF ou un scan, envoyez-le à Claude dans la conversation : il le convertit en lignes prêtes à importer.</p></div>
+  ${defs}${body}`}
+function loadSheet(I,name){I.sheet=name;I.rows=I.sheets[name];const a=autoMap(I.rows,I.type);I.h=a.h;I.map=a.map}
+function wireImporter(root){
+  const I=FORM.imp;
+  root.querySelectorAll('#iType button').forEach(b=>b.onclick=()=>{I.type=b.dataset.t;I.rows=null;I.sheets=null;I.err='';I.def={};render()});
+  $('#iFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;I.err='';
+    try{I.sheets=await readSheets(f);const names=Object.keys(I.sheets).filter(n=>I.sheets[n].length);if(!names.length)throw new Error('Le fichier est vide.');
+      // feuille la plus adaptée
+      let best=names[0],bs=-1;names.forEach(n=>{const a=autoMap(I.sheets[n],I.type);if(a.score>bs){bs=a.score;best=n}});
+      I.sheets=Object.fromEntries(names.map(n=>[n,I.sheets[n]]));loadSheet(I,best)}
+    catch(er){I.err=er.message||'Lecture impossible.';I.rows=null}
+    render()};
+  $('#iTpl').onclick=()=>{const heads=IMP[I.type].fields.map(f=>f[1]);exportCsv('modele-'+I.type+'.csv',heads,[])};
+  const sh=$('#iSheet');if(sh)sh.onchange=()=>{loadSheet(I,sh.value);render()};
+  root.querySelectorAll('select[data-k]').forEach(s=>s.onchange=()=>{I.map[s.dataset.k]=s.value===''?null:+s.value;render()});
+  const dv=(id,k)=>{const el=$(id);if(el)el.oninput=el.onchange=()=>{I.def[k]=el.value.trim()}};
+  dv('#dfDate','date');dv('#dfBc','bc');dv('#dfNom','nom');dv('#dfProj','projet');dv('#dfLieu','lieu');dv('#dfF','f');
+  const go=$('#iGo');if(go)go.onclick=async()=>{
+    const recs=buildRecs().recs;I.busy=true;render();
+    const bar=$('#iBar'),txt=$('#iTxt');
+    const fail=await writeMany(recs.map(r=>({c:r.c,id:r.id,d:r.d})),(d,n)=>{if(bar)bar.style.width=(100*d/n)+'%';if(txt)txt.textContent=d+' / '+n+' lignes enregistrées…'});
+    if(I.type==='livraisons'||I.type==='sorties'){ // les désignations nouvelles rejoignent la liste commune
+      const known=new Set(DES.map(x=>dkey(x.d)));const add=[];recs.forEach(r=>{const k=dkey(r.d.des);if(!known.has(k)){known.add(k);add.push({c:'designations',id:'d'+hash(k),d:{d:r.d.des,c:'',u:r.d.unite||''}})}});
+      ['fournisseurs:nom','projets:projet','lieux:lieu'].forEach(x=>{const [c,k]=x.split(':');const have=new Set(names(c).map(dkey));uniq(recs.map(r=>r.d[k])).forEach(n=>{if(!have.has(dkey(n))){have.add(dkey(n));add.push({c,id:slug(n),d:{nom:n,ts:Date.now()}})}})});
+      if(add.length)await writeMany(add,()=>{})}
+    I.busy=false;I.rows=null;I.sheets=null;
+    toast(fail?`${recs.length-fail} ligne(s) importée(s), ${fail} en échec.`:recs.length+' ligne(s) importée(s).');render()};
+  const rs=$('#iReset');if(rs)rs.onclick=()=>{I.rows=null;I.sheets=null;I.err='';render()}}
+async function writeMany(items,onProg){
+  let i=0,done=0,fail=0;
+  const worker=async()=>{while(i<items.length){const it=items[i++];let tries=0;
+    for(;;){try{const dc=S.db.collection(it.c).doc(it.id);if(it.del)await dc.delete();else await dc.set(it.d);break}
+      catch(e){if((e.code==='resource_exhausted'||e.code==='unavailable')&&++tries<=5){await sleep(300*tries)}else{fail++;break}}}
+    done++;onProg(done,items.length)}};
+  await Promise.all([worker(),worker(),worker(),worker()]);return fail}
+
+
+
+/* ---------- projets multiples ---------- */
+function wpList(){const l=S.wps.slice().sort((a,b)=>(a.ts||0)-(b.ts||0));if(!l.some(w=>w.id==='p0'))l.unshift({id:'p0',nom:'Projet sans nom',bailleurs:[],lignes:[]});else{const i=l.findIndex(w=>w.id==='p0');l.unshift(l.splice(i,1)[0])}return l}
+function curWp(){return wpList().find(w=>w.id===WP)||wpList()[0]}
+function applyScope(){COLLS.forEach(c=>{S[c]=scope(c)})}
+function setWP(id){WP=id;FORM.pd=null;try{localStorage.setItem('wp',id)}catch(e){}
+  applyScope();FORM.pe=null;FORM.sel=null;FORM.basket=[];FORM.ask=false;FORM.open=new Set();FORM.imp=null;FORM.pj=null;FORM.soErr='';
+  Object.assign(FORM.so,{store:'',waybill:'',des:'',unite:'',ouvrage:'',lieu:'',projet:'',qte:''});Object.assign(FORM.li,{bc:'',nom:'',projet:'',lieu:'',des:'',qte:'',unite:'',lines:[]});
+  Object.values(FQ.mo).forEach(s=>s.clear());Object.values(FQ.mat).forEach(s=>s.clear());render()}
+function renderProjBar(){
+  const bar=$('#projbar');if(!bar)return;const w=curWp(),L=wpList();
+  bar.innerHTML=`<label for="wpSel" style="margin:0;color:inherit;font-size:12px;text-transform:uppercase;letter-spacing:.06em">Projet</label><select id="wpSel">${L.map(x=>`<option value="${esc(x.id)}" ${x.id===w.id?'selected':''}>${esc(x.nom)}</option>`).join('')}</select>
+    <button class="btn" id="wpRen" ${S.can?'':'disabled'}>Renommer le projet</button><button class="btn" id="wpNew" ${S.can?'':'disabled'}>Créer un projet</button>${w.id!=='p0'?`<button class="btn" id="wpDel" ${S.can?'':'disabled'} title="Supprimer ce projet et toutes ses données">🗑 Supprimer le projet</button>`:''}
+    <div class="pinfo">${(w.bailleurs||[]).length?'Bailleur(s) : '+esc(w.bailleurs.join(', ')):'Aucun bailleur renseigné'} · ${(w.lignes||[]).length?'Lignes : '+esc(w.lignes.join(', ')):'Aucun code de ligne'}</div>`;
+  $('#wpSel').onchange=e=>setWP(e.target.value);
+  const dl=$('#wpDel');if(dl)dl.onclick=()=>{FORM.pe=null;FORM.pd={txt:'',saved:false,busy:false};render()};
+  $('#wpRen').onclick=()=>{FORM.pd=null;FORM.pe={mode:'edit',nom:w.nom==='Projet sans nom'?'':w.nom,bail:(w.bailleurs||[]).slice(),lig:(w.lignes||[]).slice()};render();const n=$('#peNom');if(n)n.focus()};
+  $('#wpNew').onclick=()=>{FORM.pd=null;FORM.pe={mode:'new',nom:'',bail:[],lig:[]};render();const n=$('#peNom');if(n)n.focus()}}
+function viewProjPanel(){
+  const e=FORM.pe,tags=(arr,k)=>arr.map((x,i)=>`<span class="tag">${esc(x)}<button data-pr="${k}:${i}" aria-label="Retirer ${esc(x)}">×</button></span>`).join('');
+  return `<div class="card" id="projpanel"><h2>${e.mode==='new'?'Créer un projet (il démarre vide)':'Renommer le projet'}</h2>
+    <div class="form">
+      <div class="wide"><label for="peNom">Nom du projet</label><input id="peNom" value="${esc(e.nom)}" autocomplete="off" placeholder="ex. Fonds humanitaires"></div>
+      <div class="wide"><label for="peBail">Nom des bailleurs (un par ajout, ou séparés par une virgule)</label><div class="tagl">${tags(e.bail,'bail')}</div><div class="row nw"><input id="peBail" autocomplete="off"><button class="btn sm" data-pa="bail">Ajouter</button></div></div>
+      <div class="wide"><label for="peLig">Codes de ligne</label><div class="tagl">${tags(e.lig,'lig')}</div><div class="row nw"><input id="peLig" autocomplete="off"><button class="btn sm" data-pa="lig">Ajouter</button></div></div>
+    </div>
+    <div class="row" style="margin-top:14px"><button class="btn pri" id="peOk">${e.mode==='new'?'Créer le projet':'Enregistrer'}</button><button class="btn" id="peNo">Annuler</button></div></div>`}
+function wireProjPanel(root){
+  const e=FORM.pe,nom=$('#peNom');nom.oninput=()=>{e.nom=nom.value};
+  const add=k=>{const i=$(k==='bail'?'#peBail':'#peLig');const parts=i.value.split(/[,;]/).map(x=>x.trim()).filter(Boolean);
+    parts.forEach(p=>{if(!e[k].some(x=>dkey(x)===dkey(p)))e[k].push(p)});render();$(k==='bail'?'#peBail':'#peLig').focus()};
+  root.querySelectorAll('[data-pa]').forEach(b=>b.onclick=()=>add(b.dataset.pa));
+  [['#peBail','bail'],['#peLig','lig']].forEach(([id,k])=>$(id).onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();add(k)}});
+  root.querySelectorAll('[data-pr]').forEach(b=>b.onclick=()=>{const [k,i]=b.dataset.pr.split(':');e[k].splice(+i,1);render()});
+  $('#peNo').onclick=()=>{FORM.pe=null;render()};
+  $('#peOk').onclick=async()=>{
+    // prendre en compte ce qui est tapé sans avoir cliqué sur Ajouter
+    [['#peBail','bail'],['#peLig','lig']].forEach(([id,k])=>{$(id).value.split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(p=>{if(!e[k].some(x=>dkey(x)===dkey(p)))e[k].push(p)})});
+    const n=(e.nom||'').trim();if(!n){toast('Donnez un nom au projet.');nom.focus();return}
+    if(wpList().some(w=>dkey(w.nom)===dkey(n)&&!(e.mode==='edit'&&w.id===WP))){toast('Un projet porte déjà ce nom.');return}
+    const id=e.mode==='new'?'p'+Date.now().toString(36):WP,old=S.wps.find(w=>w.id===id);
+    try{await S.dbRaw.collection('wprojets').doc(id).set({nom:n,bailleurs:e.bail,lignes:e.lig,ts:old?old.ts||Date.now():(id==='p0'?1:Date.now())});
+      const mode=e.mode;FORM.pe=null;
+      if(mode==='new'){S.wps=S.wps.filter(w=>w.id!==id).concat([{id,nom:n,bailleurs:e.bail,lignes:e.lig,ts:Date.now()}]);setWP(id);toast('Projet « '+n+' » créé : il est vide.')}
+      else{S.wps=S.wps.filter(w=>w.id!==id).concat([{id,nom:n,bailleurs:e.bail,lignes:e.lig,ts:id==='p0'?1:(old&&old.ts)||Date.now()}]);render();toast('Projet enregistré')}}
+    catch(er){toast('Enregistrement impossible : '+(er.message||er.code))}}}
+
+
+function viewDelPanel(){
+  const d=FORM.pd,w=curWp(),n=COLLS.reduce((s,c)=>s+S[c].length,0);
+  return `<div class="card" id="delpanel" style="border-color:var(--bad)"><h2>Supprimer le projet « ${esc(w.nom)} »</h2>
+    <p style="margin:0 0 10px">Cela efface <b>définitivement</b> ce projet et ses ${n} éléments (livraisons, sorties, main d’œuvre, listes). Les autres projets ne sont pas touchés.</p>
+    <div class="row" style="margin-bottom:12px"><button class="btn" id="pdSave">Télécharger d’abord le fichier Excel du projet</button>${d.saved?'<span class="hint">Fichier téléchargé.</span>':'<span class="hint">Conseillé, pas obligatoire.</span>'}</div>
+    <label for="pdTxt">Pour confirmer, écrivez le nom exact du projet</label>
+    <div class="row"><input id="pdTxt" value="${esc(d.txt)}" autocomplete="off" placeholder="${esc(w.nom)}" style="max-width:300px"><button class="btn pri" id="pdOk" style="background:var(--bad);border-color:var(--bad);color:#fff" ${d.busy?'disabled':''}>Supprimer définitivement</button><button class="btn" id="pdNo" ${d.busy?'disabled':''}>Annuler</button></div>
+    <div id="pdProg" style="margin-top:10px" ${d.busy?'':'hidden'}><div class="prog"><i id="pdBar"></i></div><div class="hint" id="pdT"></div></div></div>`}
+function wireDelPanel(root){
+  const d=FORM.pd,w=curWp(),tx=$('#pdTxt');tx.oninput=()=>{d.txt=tx.value};
+  $('#pdNo').onclick=()=>{FORM.pd=null;render()};
+  $('#pdSave').onclick=async()=>{if(await saveProject()){d.saved=true;render();toast('Fichier téléchargé.')}};
+  $('#pdOk').onclick=async()=>{
+    if(dkey(d.txt)!==dkey(w.nom)){toast('Le nom ne correspond pas : écrivez « '+w.nom+' ».');tx.focus();return}
+    const items=COLLS.flatMap(c=>S[c].map(x=>({c,id:x.id,del:true})));const id=w.id;d.busy=true;render();
+    const bar=$('#pdBar'),t2=$('#pdT');
+    const fail=await writeMany(items,(k,n)=>{if(bar)bar.style.width=(100*k/n)+'%';if(t2)t2.textContent=k+' / '+n+' supprimés…'});
+    if(fail){d.busy=false;toast(fail+' élément(s) non supprimés : le projet est conservé, réessayez.');render();return}
+    try{await S.dbRaw.collection('wprojets').doc(id).delete()}catch(e){d.busy=false;toast('Suppression du projet impossible.');render();return}
+    S.wps=S.wps.filter(x=>x.id!==id);FORM.pd=null;setWP('p0');toast('Projet « '+w.nom+' » supprimé.')}}
+
+/* ---------- projet : enregistrer en Excel, vider, réimporter ---------- */
+const PJ={mo:['MainOeuvre',['p','f','date','hj','ts']],sorties:['Sorties',['date','store','waybill','des','unite','ouvrage','qte','lieu','projet','ts']],
+  livraisons:['Livraisons',['date','bc','nom','projet','lieu','des','qte','unite','prf','ts']],postes:['Postes',['f','lin','poste','q','u','max','prix','ts']],
+  designations:['Designations',['d','c','u']],fournisseurs:['Fournisseurs',['nom','hidden','ts']],lieux:['Lieux',['nom','hidden','ts']],projets:['Projets',['nom','hidden','ts']],ouvrages:['Ouvrages',['nom','hidden','ts']]};
+const PJ_NUM=new Set(['hj','qte','max','prix','ts']);
+function buildWorkbook(){
+  const wb=XLSX.utils.book_new(),st=computeStock();
+  const add=(name,rows,w)=>{const ws=XLSX.utils.aoa_to_sheet(rows);if(w)ws['!cols']=w.map(x=>({wch:x}));XLSX.utils.book_append_sheet(wb,ws,name)};
+  const W=curWp();
+  add('Resume',[['Base de données terrain – projet enregistré'],['Projet',W.nom],['Bailleur(s)',(W.bailleurs||[]).join(', ')],['Codes de ligne',(W.lignes||[]).join(', ')],['Date',today()],['Livraisons',S.livraisons.length],['Sorties',S.sorties.length],['Saisies main d’œuvre',S.mo.length],['Format','v2 – réimportable par l’onglet Projet'],[],['Les feuilles par fournisseur (prévu, consommé, reste), Stock, Lots et MainOeuvre_detail sont informatives ; les autres servent à réimporter.']],[30,40]);
+  const um=usedMap(),FN=(f,v)=>({t:'n',f,v}),T=s=>({t:'s',v:s});
+  uniq(P.map(p=>p.f)).forEach(fo=>{
+    const ps=P.filter(p=>p.f===fo),n=ps.length+1,rows=[['Code','Code LIN','Poste','Qualification','Unité','Prévu','Consommé','Reste','Prix unitaire (USD)','Coût prévu (USD)','Coût consommé (USD)','Coût restant (USD)','Statut']];
+    let sp=0,sc=0,cp=0,cc=0;
+    ps.forEach((p,i)=>{const r=i+2,u=um[p.id]||0,st=statut(p.max,u);sp+=p.max;sc+=u;cp+=p.max*p.prix;cc+=u*p.prix;
+      rows.push([p.id,p.lin||'',p.poste,p.q,p.u||'',p.max,u,FN(`F${r}-G${r}`,p.max-u),p.prix,FN(`F${r}*I${r}`,p.max*p.prix),FN(`G${r}*I${r}`,u*p.prix),FN(`H${r}*I${r}`,(p.max-u)*p.prix),T(st==='DEPASSE'?'DEPASSE':st==='FINIE'?'FINIE':'En cours')])});
+    rows.push(['TOTAL','','','','',FN(`SUM(F2:F${n})`,sp),FN(`SUM(G2:G${n})`,sc),FN(`SUM(H2:H${n})`,sp-sc),'',FN(`SUM(J2:J${n})`,cp),FN(`SUM(K2:K${n})`,cc),FN(`SUM(L2:L${n})`,cp-cc),'']);
+    add(fo.slice(0,31),rows,[8,12,52,14,9,9,11,9,12,14,16,14,10]);
+    const ws=wb.Sheets[fo.slice(0,31)];ws['!freeze']={xSplit:0,ySplit:1};ws['!autofilter']={ref:`A1:M${n}`}});
+  const stockRows=[['Article','Unité','Projet','Quantité en stock']];
+  [...st.art.values()].sort((a,b)=>a.des.localeCompare(b.des,'fr')).forEach(a=>Object.entries(a.proj).forEach(([p,v])=>stockRows.push([a.des,a.unite,p,v])));
+  add('Stock',stockRows,[44,10,22,16]);
+  add('Lots',[['Article','Projet','Fournisseur','Bon de commande','Date','Livré','Restant'],...st.lots.map(l=>[l.des,l.projet,l.nom,l.bc,l.date,l.qte,l.rest])],[44,22,24,20,12,10,10]);
+  add('MainOeuvre_detail',[['Date','Fournisseur','Qualification','Poste','Code LIN','Hommes-jours','Prix unitaire','Coût'],...S.mo.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||'')).map(e=>{const p=PID[e.p]||{};return [e.date,e.f,p.q,p.poste,p.lin,e.hj,p.prix,(e.hj||0)*(p.prix||0)]})],[12,16,14,50,12,12,12,12]);
+  Object.entries(PJ).forEach(([c,[name,cols]])=>add(name,[['id',...cols],...S[c].map(d=>[d.id,...cols.map(k=>d[k]==null?'':d[k])])]));
+  return wb}
+async function saveProject(){
+  if(!window.XLSX){toast('Excel indisponible (connexion). Réessayez.');return false}
+  if(!S.dl){toast('Téléchargement indisponible dans cette vue.');return false}
+  try{const wb=buildWorkbook();const buf=XLSX.write(wb,{type:'array',bookType:'xlsx'});
+    await S.dl.save({filename:'projet-'+slug(curWp().nom)+'-'+today()+'.xlsx',data:buf});return true}
+  catch(e){if(e.code==='declined')toast('Téléchargement refusé : rien n’est vidé.');else toast('Enregistrement impossible : '+(e.message||e.code));return false}}
+function viewProjet(){
+  const P2=FORM.pj||(FORM.pj={saved:false,txt:'',busy:false,msg:''});
+  const n=COLLS.reduce((s,c)=>s+S[c].length,0);
+  return `
+  ${S.can?'':'<div class="banner ro">Lecture seule : cette page demande un accès contributeur.</div>'}
+  <div class="card"><h2>1. Enregistrer le projet « ${esc(curWp().nom)} »</h2>
+    <p style="margin:0 0 10px">Télécharge un fichier Excel avec tout : une feuille par fournisseur de main d’œuvre (ABRIMADE, TGB…) avec prévu, consommé, reste et totaux en dollars, livraisons, sorties, stock par projet, lots (fournisseur et bon de commande), main d’œuvre et listes. Tu peux le lire, le partager, ou le réimporter ici plus tard.</p>
+    <div class="row"><button class="btn pri" id="pjSave">Enregistrer et garder le projet</button><button class="btn" id="pjSaveDel" style="border-color:var(--bad);color:var(--bad)" ${S.can?'':'disabled'}>Enregistrer et supprimer le projet en cours</button></div>
+    <span class="hint" style="display:block;margin-top:8px">« Garder » télécharge le fichier et ne supprime rien. « Supprimer » télécharge d’abord le fichier, puis demande une confirmation avant d’effacer ${curWp().id==='p0'?'les données de ce projet (le projet de départ se vide mais reste, il ne peut qu’être renommé)':'le projet et toutes ses données'}. · ${S.livraisons.length} livraisons · ${S.sorties.length} sorties · ${S.mo.length} saisies de main d’œuvre</span></div>
+  ${P2.msg?`<div class="banner">${esc(P2.msg)}</div>`:''}
+  ${P2.saved||P2.busy?`<div class="card"><h2>2. Remettre à zéro le projet « ${esc(curWp().nom)} »</h2>
+    ${P2.saved?`<p style="margin:0 0 10px">Le fichier a été téléchargé. Tu peux maintenant vider la base. <b>Cette action est définitive</b> et ne concerne que ce projet (les autres projets ne bougent pas) : livraisons, sorties, saisies de main d’œuvre et listes seront supprimées (les postes et désignations de départ intégrés à la page restent). Pour confirmer, écris <b>VIDER</b>.</p>
+      <div class="row"><input id="pjTxt" value="${esc(P2.txt)}" placeholder="VIDER" style="max-width:160px" autocomplete="off"><button class="btn pri" id="pjClear" ${S.can&&!P2.busy?'':'disabled'}>Vider la base (${n} éléments)</button></div>`
+      :''}
+    <div id="pjProg" style="margin-top:10px" ${P2.busy?'':'hidden'}><div class="prog"><i id="pjBar"></i></div><div class="hint" id="pjTxtP"></div></div>
+    </div>`:''}
+  <div class="card"><h2>2. Réimporter un projet enregistré</h2>
+    <p style="margin:0 0 10px">Choisis un fichier « projet-….xlsx » enregistré plus tôt : tout revient à l’identique (même stock, mêmes lots, mêmes graphiques). Les éléments déjà présents avec le même identifiant sont remplacés, rien n’est dupliqué.</p>
+    <input type="file" id="pjFile" accept=".xlsx" ${S.can?'':'disabled'} style="max-width:360px">
+    ${P2.err?`<div class="banner err" style="margin-top:10px">${esc(P2.err)}</div>`:''}</div>`}
+function wireProjet(root){
+  const P2=FORM.pj;
+  $('#pjSave').onclick=async()=>{if(await saveProject()){P2.msg='Projet enregistré : le fichier est téléchargé et le projet est conservé.';render();toast('Projet enregistré, rien n’est supprimé.')}};
+  $('#pjSaveDel').onclick=async()=>{if(!(await saveProject()))return;
+    if(WP!=='p0'){FORM.pd={txt:'',saved:true,busy:false};render();window.scrollTo({top:0,behavior:'smooth'});toast('Fichier téléchargé. Confirmez la suppression du projet.')}
+    else{P2.saved=true;P2.txt='';P2.msg='';render();toast('Fichier téléchargé. Écrivez VIDER pour confirmer.');const x=$('#pjTxt');if(x)x.focus()}};
+  const tx=$('#pjTxt');if(tx)tx.oninput=()=>{P2.txt=tx.value};
+  const cl=$('#pjClear');if(cl)cl.onclick=async()=>{
+    if(P2.txt.trim().toUpperCase()!=='VIDER'){toast('Écrivez VIDER pour confirmer.');tx.focus();return}
+    const items=COLLS.flatMap(c=>S[c].map(d=>({c,id:d.id,del:true})));P2.busy=true;render();
+    const bar=$('#pjBar'),t2=$('#pjTxtP');
+    const fail=await writeMany(items,(d,n)=>{if(bar)bar.style.width=(100*d/n)+'%';if(t2)t2.textContent=d+' / '+n+' supprimés…'});
+    P2.busy=false;P2.saved=false;P2.txt='';P2.msg=fail?fail+' élément(s) n’ont pas pu être supprimés. Recommencez.':'Base remise à zéro. Importez un nouveau fichier ou réimportez un projet enregistré.';render()};
+  $('#pjFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;P2.err='';
+    try{if(!window.XLSX)throw new Error('Lecture Excel indisponible (connexion).');
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const items=[];
+      if(!wb.SheetNames.includes('Livraisons')&&!wb.SheetNames.includes('Sorties')&&!wb.SheetNames.includes('Resume'))throw new Error('Ce fichier n’est pas un projet enregistré par cette page.');
+      Object.entries(PJ).forEach(([c,[name,cols]])=>{const ws=wb.Sheets[name];if(!ws)return;
+        XLSX.utils.sheet_to_json(ws,{defval:''}).forEach(r=>{const id=String(r.id||'').trim().replace(/^[^~]*~/,'');if(!id)return;const d={};
+          cols.forEach(k=>{let v=r[k];if(v===''||v==null)return;if(PJ_NUM.has(k))v=num(v);else if(k==='hidden')v=(v===true||/^(true|vrai|1)$/i.test(String(v)));else v=String(v);d[k]=v});
+          if(c==='mo'&&d.p){d.p=String(d.p).replace(/^[^~]*~/,'');if(WP!=='p0')d.p=WP+'~'+d.p}
+          items.push({c,id,d})})});
+      if(!items.length)throw new Error('Aucune donnée trouvée dans ce fichier.');
+      P2.busy=true;render();const bar=$('#pjBar'),t2=$('#pjTxtP');
+      const fail=await writeMany(items,(d,n)=>{if(bar)bar.style.width=(100*d/n)+'%';if(t2)t2.textContent=d+' / '+n+' lignes importées…'});
+      P2.busy=false;P2.msg=fail?`${items.length-fail} importées, ${fail} en échec.`:`Projet réimporté : ${items.length} éléments.`}
+    catch(er){P2.busy=false;P2.err=er.message||'Lecture impossible.'}
+    render()}}
+
+
+/* ---------- synchronisation vers Google Sheets (script Apps Script de l'utilisateur) ---------- */
+const SYNC=(()=>{let o={};try{o=JSON.parse(localStorage.getItem('bdt-sync')||'{}')}catch(e){}return {url:o.url||'',key:o.key||'',last:o.last||'',auto:!!o.auto,busy:false,msg:'',ok:true,link:o.link||''}})();
+function saveSync(){try{localStorage.setItem('bdt-sync',JSON.stringify({url:SYNC.url,key:SYNC.key,last:SYNC.last,auto:SYNC.auto,link:SYNC.link}))}catch(e){}}
+function safeCell(v){if(typeof v==='string'&&/^[=+\-@]/.test(v))return "'"+v;return v==null?'':v}
+function exportSheets(){
+  const out=[],st=computeStock(),um=usedMap(),W=curWp();
+  out.push({name:'Resume',rows:[['Base de données terrain'],['Projet',W.nom],['Bailleur(s)',(W.bailleurs||[]).join(', ')],['Codes de ligne',(W.lignes||[]).join(', ')],['Synchronisé le',new Date().toLocaleString('fr-FR')]]});
+  uniq(P.map(p=>p.f)).forEach(fo=>{const ps=P.filter(p=>p.f===fo);if(!ps.length)return;
+    const rows=[['Code','Code LIN','Poste','Qualification','Unité','Prévu','Consommé','Reste','Prix unitaire (USD)','Coût prévu (USD)','Coût consommé (USD)','Coût restant (USD)','Statut']];
+    let a=0,b=0,c=0,d=0;
+    ps.forEach(p=>{const u=um[p.id]||0;a+=p.max;b+=u;c+=p.max*p.prix;d+=u*p.prix;rows.push([p.id,p.lin||'',p.poste,p.q,p.u||'',p.max,u,p.max-u,p.prix,p.max*p.prix,u*p.prix,(p.max-u)*p.prix,statut(p.max,u)==='DEPASSE'?'DEPASSE':statut(p.max,u)==='FINIE'?'FINIE':'En cours'])});
+    rows.push(['TOTAL','','','','',a,b,a-b,'',c,d,c-d,'']);out.push({name:fo.slice(0,60),rows})});
+  const sr=[['Article','Unité','Projet','Quantité en stock']];[...st.art.values()].sort((x,y)=>x.des.localeCompare(y.des,'fr')).forEach(x=>Object.entries(x.proj).forEach(([p,v])=>sr.push([x.des,x.unite,p,v])));out.push({name:'Stock',rows:sr});
+  out.push({name:'Lots',rows:[['Article','Projet','Fournisseur','Bon de commande','Date','Livré','Restant'],...st.lots.map(l=>[l.des,l.projet,l.nom,l.bc,l.date,l.qte,l.rest])]});
+  out.push({name:'MainOeuvre_detail',rows:[['Date','Fournisseur','Qualification','Poste','Code LIN','Hommes-jours','Prix unitaire','Coût'],...S.mo.slice().sort((x,y)=>(x.date||'').localeCompare(y.date||'')).map(e=>{const p=PID[e.p]||{};return [e.date,e.f,p.q,p.poste,p.lin,e.hj,p.prix,(e.hj||0)*(p.prix||0)]})]});
+  Object.entries(PJ).forEach(([c,[name,cols]])=>out.push({name:'data_'+name,rows:[['id','wp',...cols],...(S.raw[c]||[]).map(d=>[d.id,d.wp||'p0',...cols.map(k=>d[k]==null?'':d[k])])]}));
+  ['unites','wprojets'].forEach(c=>out.push({name:'data_'+c,rows:[['id',...(c==='unites'?['nom','type','hidden','ts']:['nom','bailleurs','lignes','ts'])],...(c==='unites'?S.unites.map(d=>[d.id,d.nom,d.type,!!d.hidden,d.ts||'']):S.wps.map(d=>[d.id,d.nom,(d.bailleurs||[]).join(', '),(d.lignes||[]).join(', '),d.ts||'']))]}));
+  out.forEach(s=>{s.rows=s.rows.map(r=>r.map(safeCell))});return out}
+async function doSync(silent){
+  if(SYNC.busy)return;if(!SYNC.url||!SYNC.key){if(!silent)toast('Renseignez l’adresse du script et le code secret.');return}
+  SYNC.busy=true;SYNC.msg='Envoi en cours…';SYNC.ok=true;if(tab==='sync')render();
+  try{
+    const res=await fetch(SYNC.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({key:SYNC.key,sheets:exportSheets()}),redirect:'follow'});
+    const j=await res.json();
+    if(!j.ok)throw new Error(j.error||'Réponse inattendue');
+    SYNC.last=new Date().toLocaleString('fr-FR');SYNC.link=j.url||SYNC.link;SYNC.msg='Synchronisation réussie ('+j.count+' feuilles).';SYNC.ok=true;saveSync();if(!silent)toast('Synchronisation réussie')}
+  catch(e){SYNC.ok=false;SYNC.msg=navigator.onLine===false?'Pas de connexion. Vos données restent sur le téléphone ; réessayez quand le réseau revient.':'Échec : '+(e.message||e)+'. Vérifiez l’adresse du script et le code secret.'}
+  SYNC.busy=false;if(tab==='sync')render()}
+window.addEventListener('online',()=>{if(SYNC.auto&&SYNC.url&&SYNC.key)doSync(true)});
+function viewSync(){
+  return `<div class="card"><h2>Synchroniser avec Google Sheets</h2>
+    <p style="margin:0 0 10px">Les données restent sur ce téléphone et fonctionnent sans internet. Quand le réseau est là, ce bouton envoie une copie dans une feuille Google Sheets de <b>ton propre Drive</b> : une feuille par type de données, plus ABRIMADE/TGB, le stock et les lots du projet affiché.</p>
+    <div class="form"><div class="wide"><label for="syUrl">Adresse du script Google (se termine par /exec)</label><input id="syUrl" value="${esc(SYNC.url)}" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec"></div>
+    <div><label for="syKey">Code secret (le même que dans le script)</label><input id="syKey" type="password" value="${esc(SYNC.key)}" autocomplete="off"></div>
+    <div><label style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" id="syAuto" style="width:auto;min-height:0" ${SYNC.auto?'checked':''}>Synchroniser seul quand le réseau revient</label></div></div>
+    <div class="row" style="margin-top:12px"><button class="btn pri" id="syGo" ${SYNC.busy?'disabled':''}>Synchroniser maintenant</button><button class="btn" id="sySave">Enregistrer les réglages</button></div>
+    ${SYNC.msg?`<div class="banner ${SYNC.ok?'':'err'}" style="margin-top:12px">${esc(SYNC.msg)}</div>`:''}
+    <p class="hint" style="margin:12px 0 0">${SYNC.last?'Dernière synchronisation : '+esc(SYNC.last)+'. ':'Jamais synchronisé. '}${SYNC.link?`<a href="${esc(SYNC.link)}" target="_blank" rel="noopener">Ouvrir la feuille Google Sheets</a>`:''}</p></div>
+  <div class="card"><h2>Première configuration (une fois par personne)</h2>
+    <ol style="margin:0;padding-left:20px;display:grid;gap:6px"><li>Ouvrir <b>script.google.com</b> avec son compte Google, créer un nouveau projet.</li><li>Coller le contenu du fichier <b>Code.gs</b> fourni, remplacer le code secret par le sien, enregistrer.</li><li>Déployer > Nouveau déploiement > type « Application Web » > Exécuter en tant que : <b>moi</b> > Accès : <b>tout le monde</b> > Déployer, puis autoriser.</li><li>Copier l’adresse qui se termine par /exec ici, écrire le même code secret, puis « Synchroniser maintenant ».</li></ol>
+    <p class="hint" style="margin:10px 0 0">Chaque collègue fait la même chose avec son compte : ses données vont dans son Drive, pas dans le tien.</p></div>`}
+function wireSync(root){
+  const u=$('#syUrl'),k=$('#syKey'),a=$('#syAuto');
+  const read=()=>{SYNC.url=u.value.trim();SYNC.key=k.value;SYNC.auto=a.checked;saveSync()};
+  [u,k].forEach(x=>x.oninput=read);a.onchange=read;
+  $('#sySave').onclick=()=>{read();toast('Réglages enregistrés')};
+  $('#syGo').onclick=()=>{read();doSync(false)}}
+
+/* ---------- export, suppression ---------- */
+async function exportCsv(name,heads,rows){
+  if(!S.dl){toast('Export indisponible dans cette vue.');return}
+  const q=v=>{v=String(v??'');return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  const txt='﻿'+[heads,...rows].map(r=>r.map(q).join(';')).join('\r\n');
+  try{await S.dl.save({filename:name,data:txt})}catch(e){if(e.code!=='declined')toast('Export impossible.')}}
+let delArm=null;
+function wireDeletes(root){
+  root.querySelectorAll('[data-del]').forEach(b=>b.onclick=async()=>{
+    const key=b.dataset.del;
+    if(delArm!==key){delArm=key;root.querySelectorAll('[data-del]').forEach(x=>{x.textContent='Supprimer'});b.textContent='Confirmer';return}
+    delArm=null;const [c,id]=key.split(':');
+    try{await S.db.collection(c).doc(id).delete();toast('Ligne supprimée')}catch(e){toast('Suppression impossible')}})}
+
+/* ---------- rendu ---------- */
+const VIEWS={'mo-dashboard':viewMoDash,'materiel':viewMateriel,'stock':viewStock,'saisie-mo':viewSaisieMo,'saisie-sorties':viewSaisieSorties,'saisie-livraisons':viewSaisieLivraisons,'importer':viewImporter,'projet':viewProjet,'sync':viewSync,'listes':viewListes};
+function renderTabs(){
+  $('#tabs').innerHTML=TABS.map(t=>t[0]==='|'?'<span class="sep"></span>':`<button role="tab" data-t="${t[0]}" aria-selected="${tab===t[0]}">${t[1]}</button>`).join('');
+  $('#tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{location.hash=b.dataset.t})}
+let pend=false;
+function allLoaded(){return COLLS.every(c=>S.loaded[c])&&S.loaded.wprojets&&S.loaded.unites}
+function render(){
+  const main=$('#main');const y=window.scrollY;
+  if(S.err){main.innerHTML=`<div class="card empty">${esc(S.err)}</div>`;return}
+  if(!allLoaded()){main.innerHTML='<div class="card empty" id="loadmsg">Chargement des données…</div>';return}
+  rebuildRef();
+  const full=S.full.length?`<div class="banner">Limite de 1 000 lignes atteinte pour : ${esc(S.full.join(', '))}. Les lignes au-delà ne sont pas lues. Exportez en CSV et archivez les anciennes.</div>`:'';
+  renderProjBar();
+  main.innerHTML=full+(FORM.pe?viewProjPanel():'')+(FORM.pd?viewDelPanel():'')+VIEWS[tab]();
+  if(FORM.pe)wireProjPanel(main);
+  if(FORM.pd)wireDelPanel(main);
+  if(tab==='mo-dashboard'){wireChips(main,render);const l=$('#linSel');l.onchange=()=>{FQ.mo.l.clear();if(l.value)FQ.mo.l.add(l.value);render()}}
+  if(tab==='materiel')wireChips(main,render);
+  if(tab==='stock')wireStock(main);
+  if(tab==='saisie-mo')wireSaisieMo(main);
+  if(tab==='saisie-sorties')wireSaisieSorties(main);
+  if(tab==='saisie-livraisons')wireSaisieLivraisons(main);
+  if(tab==='importer')wireImporter(main);
+  if(tab==='listes')wireListes(main);
+  if(tab==='projet')wireProjet(main);
+  if(tab==='sync')wireSync(main);
+  wireDeletes(main);
+  renderTabs();
+  window.scrollTo(0,y)}
+function schedule(){if(pend)return;pend=true;requestAnimationFrame(()=>{pend=false;const a=document.activeElement;
+  if((FORM.pe||FORM.pd)&&a&&a.closest&&a.closest('#projpanel,#delpanel'))return;
+  if(a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)&&(tab.startsWith('saisie')||tab==='listes'||tab==='importer'||tab==='stock'||tab==='projet'||tab==='sync')&&a.id)return;
+  if(FORM.imp&&FORM.imp.busy)return;render()})}
+function route(){const h=location.hash.replace('#','');tab=VIEWS[h]?h:'mo-dashboard';renderTabs();render()}
+window.addEventListener('hashchange',route);
+
+/* ---------- données partagées ---------- */
+async function boot(){
+  renderTabs();route();
+  const timer=setTimeout(()=>{if(!allLoaded()){const m=$('#loadmsg');if(m)m.textContent='Les données ne répondent pas encore. Vérifiez votre connexion ; la page se mettra à jour toute seule.'}},10000);
+  let db=null;try{db=await claude.use('db')}catch(e){}
+  if(!db){clearTimeout(timer);S.err='La base de données n’est pas disponible dans cette vue. Ouvrez la page depuis claude.ai en étant connecté.';render();return}
+  S.dbRaw=db;
+  S.db={collection(name){const c=db.collection(name);if(!SCOPED.includes(name))return c;
+    return {doc(id){const full=PREF.includes(name)&&WP!=='p0'&&!id.startsWith(WP+'~')?WP+'~'+id:id;const dd=c.doc(full);return {set:d=>dd.set({...d,wp:WP}),delete:()=>dd.delete()}}}}};
+  db.collection('unites').limit(500).onSnapshot(s=>{S.unites=s.docs.map(d=>({id:d.id,...d.data()}));S.loaded.unites=true;if(allLoaded())clearTimeout(timer);schedule()},e=>{S.err='Lecture des unités impossible ('+(e.code||'erreur')+').';render()});
+  db.collection('wprojets').limit(200).onSnapshot(s=>{S.wps=s.docs.map(d=>({id:d.id,...d.data()}));S.loaded.wprojets=true;if(!wpList().some(w=>w.id===WP))WP='p0',applyScope();if(allLoaded())clearTimeout(timer);schedule()},e=>{S.err='Lecture des projets impossible ('+(e.code||'erreur')+').';render()});
+  try{const u=await claude.use('user');if(u){const c=u.can('data.write');if(c===false)S.can=false}}catch(e){}
+  try{S.dl=await claude.use('downloads')}catch(e){}
+  COLLS.forEach(name=>db.collection(name).limit(1000).onSnapshot(s=>{
+    S.raw[name]=s.docs.map(d=>({id:d.id,...d.data()}));S[name]=scope(name);S.loaded[name]=true;
+    S.full=S.full.filter(x=>x!==name);if(s.docs.length>=LIM)S.full.push(name);
+    if(allLoaded())clearTimeout(timer);schedule()},e=>{S.err='Lecture des données impossible ('+(e.code||'erreur')+').';render()}))}
+boot();
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+</script>
+
+</body>
+</html>
