@@ -242,7 +242,7 @@ function colF(f){const i=moFourn().indexOf(f);return PAL[(i<0?0:i)%PAL.length]}
 /* ---------- données de référence (intégrées + ajoutées) ---------- */
 function rebuildRef(){
   const m=new Map();if(WP==='p0')BASE_P.forEach(p=>m.set(p.id,{...p}));
-  S.postes.forEach(d=>m.set(d.id,{id:d.id,f:d.f,poste:d.poste,lin:d.lin||'',u:d.u||'',max:+d.max||0,prix:+d.prix||0,q:d.q||'Non Qualifié',st:d.st||''}));
+  S.postes.forEach(d=>{if(d.del){m.delete(d.id);return}m.set(d.id,{id:d.id,f:d.f,poste:d.poste,lin:d.lin||'',u:d.u||'',max:+d.max||0,prix:+d.prix||0,q:d.q||'Non Qualifié',st:d.st||''})});
   const hidF=new Set(S.fournMO.filter(x=>x.hidden).map(x=>dkey(x.nom)));
   P=[...m.values()].filter(p=>!hidF.has(dkey(p.f)));PID={};P.forEach(p=>PID[p.id]=p);
   const dm=new Map();BASE_D.forEach(x=>dm.set(dkey(x.d),{d:x.d,c:x.c||'',u:x.u||''}));
@@ -1041,7 +1041,7 @@ function parseSavedWb(wb){
   if(!isSaved)return null;
   const raw=[];Object.entries(PJ).forEach(([c,[name,cols]])=>{const ws=wb.Sheets[name];if(!ws)return;
     XLSX.utils.sheet_to_json(ws,{defval:''}).forEach(r=>{const id=String(r.id||'').trim().replace(/^[^~]*~/,'');if(!id)return;const d={};
-      cols.forEach(k=>{let v=r[k];if(v===''||v==null)return;if(PJ_NUM.has(k))v=num(v);else if(k==='hidden')v=(v===true||/^(true|vrai|1)$/i.test(String(v)));else v=String(v);d[k]=v});
+      cols.forEach(k=>{let v=r[k];if(v===''||v==null)return;if(PJ_NUM.has(k))v=num(v);else if(k==='hidden'||k==='del')v=(v===true||/^(true|vrai|1)$/i.test(String(v)));else v=String(v);d[k]=v});
       raw.push({c,id,d})})});
   const meta={};const rs=wb.Sheets.Resume;if(rs)XLSX.utils.sheet_to_json(rs,{header:1,defval:''}).forEach(r=>{const k=String(r[0]).trim(),v=String(r[1]??'').trim();
     if(k==='Projet')meta.nom=v;if(k==='Bailleur(s)')meta.bailleurs=v.split(',').map(x=>x.trim()).filter(Boolean);if(k==='Codes de ligne')meta.lignes=v.split(',').map(x=>x.trim()).filter(Boolean)});
@@ -1067,9 +1067,72 @@ async function readProjectFile(fl){
   ['livraisons','sorties','postes','designations'].filter(t=>IMP[t]).forEach(t=>names0.forEach(k=>{const a=autoMap(sh[k],t);const sc=a.score+(HINT[t].test(norm(k+' '+fl.name))?3:0);if(sc>best.score)best={type:t,sheet:k,score:sc}}));
   return {kind:'prep',name:fl.name,sheets:sh,type:best.type,sheet:best.sheet,sum:names0.length+' feuille(s), type détecté : '+IMP[best.type].title+(names0.length>1?' (feuille « '+best.sheet+' »)':'')}}
 
+/* ---------- nettoyer une partie du projet, puis importer ---------- */
+const CLEAN_KINDS=[
+  ['mo_all','Toute la main d’œuvre (postes prévus et hommes-jours saisis)','',null],
+  ['mo_saisies','Seulement les hommes-jours saisis (les postes restent)','',null],
+  ['mo_f','Un fournisseur de main d’œuvre, avec ses postes et ses saisies','Fournisseur',()=>moFourn()],
+  ['mo_p','Un poste précis, avec ses saisies','Poste',()=>P.map(p=>[p.id,p.f+' · '+(p.lin?p.lin+' · ':'')+p.poste])],
+  ['liv_all','Tout le stock (toutes les livraisons)','',null],
+  ['liv_bc','Un bon de commande (ses livraisons)','Bon de commande',()=>uniq(S.livraisons.map(r=>r.bc).filter(Boolean)).sort()],
+  ['liv_f','Un fournisseur de livraison (ses livraisons)','Fournisseur',()=>uniq(S.livraisons.map(r=>r.nom).filter(Boolean)).sort()],
+  ['so_all','Toutes les sorties de matériel','',null],
+  ['so_ouv','Les sorties d’un ouvrage','Ouvrage',()=>uniq(S.sorties.map(r=>r.ouvrage).filter(Boolean)).sort()],
+  ['so_m','Les sorties d’un mois','Mois',()=>uniq(S.sorties.map(r=>(r.date||'').slice(0,7)).filter(Boolean)).sort().reverse().map(m=>[m,monthLabel(m)])]];
+const impOf=k=>k.startsWith('mo')?'postes':k.startsWith('liv')?'livraisons':'sorties';
+const BASE_IDS=()=>new Set(WP==='p0'?BASE_P.map(p=>p.id):[]);
+function delPostes(ps){const b=BASE_IDS();return ps.map(p=>b.has(p.id)?{c:'postes',id:p.id,d:{f:p.f,poste:p.poste,del:true,ts:Date.now()}}:{c:'postes',id:p.id,del:true})}
+function cleanPlan(){
+  const C=FORM.cl||{},k=C.k,v=C.v;if(!k)return null;const def=CLEAN_KINDS.find(x=>x[0]===k);if(def[3]&&!v)return null;
+  let items=[],parts=[],imp=null,warn='';
+  if(k.startsWith('mo')){
+    let ps=[],mo=[];
+    if(k==='mo_all'){ps=P.slice();mo=S.mo.slice()}
+    else if(k==='mo_saisies'){mo=S.mo.slice()}
+    else if(k==='mo_f'){ps=P.filter(p=>p.f===v);mo=S.mo.filter(e=>e.f===v||ps.some(p=>p.id===e.p))}
+    else{ps=P.filter(p=>p.id===v);mo=S.mo.filter(e=>e.p===v)}
+    items=mo.map(e=>({c:'mo',id:e.id,del:true})).concat(delPostes(ps));
+    if(k==='mo_f')items.push({c:'fournMO',id:slug(v),d:{nom:v,hidden:true,ts:Date.now()}});
+    parts=[ps.length+' poste(s)',mo.length+' saisie(s) de main d’œuvre ('+fmt0(sum(mo,e=>+e.hj||0))+' hommes-jours)'];imp='postes'}
+  else if(k.startsWith('liv')){
+    const L=S.livraisons.filter(r=>k==='liv_all'||(k==='liv_bc'?r.bc===v:r.nom===v));items=L.map(r=>({c:'livraisons',id:r.id,del:true}));
+    parts=[L.length+' livraison(s) ('+uniq(L.map(r=>r.des)).length+' article(s))'];imp='livraisons';
+    if(S.sorties.length)warn='Les sorties déjà enregistrées restent : le stock des articles concernés peut devenir négatif tant que tu n’as pas réimporté les livraisons.'}
+  else{const O=S.sorties.filter(r=>k==='so_all'||(k==='so_ouv'?r.ouvrage===v:(r.date||'').slice(0,7)===v));items=O.map(r=>({c:'sorties',id:r.id,del:true}));
+    parts=[O.length+' sortie(s)'];imp='sorties'}
+  return {items,parts,imp,warn,n:items.filter(x=>x.del||x.d&&x.d.del).length}}
+function viewClean(){
+  const C=FORM.cl||(FORM.cl={k:'',v:'',arm:false,busy:false,msg:''}),def=CLEAN_KINDS.find(x=>x[0]===C.k),pl=cleanPlan();
+  const opts=def&&def[3]?def[3]():[];
+  const IMPL={postes:'Importer de nouveaux postes de main d’œuvre',livraisons:'Importer de nouvelles livraisons',sorties:'Importer de nouvelles sorties'};
+  const grp=(p,l)=>`<optgroup label="${l}">${CLEAN_KINDS.filter(x=>x[0].startsWith(p)).map(x=>`<option value="${x[0]}" ${C.k===x[0]?'selected':''}>${esc(x[1])}</option>`).join('')}</optgroup>`;
+  return `<div class="card" id="cleancard"><h2>2. Nettoyer une partie du projet, puis importer</h2>
+    <p style="margin:0 0 10px">Efface seulement ce que tu choisis dans « ${esc(curWp().nom)} », par exemple la main d’œuvre d’une commande terminée, puis charge la nouvelle liste. Le reste du projet ne bouge pas.</p>
+    <div class="form">
+      <div class="wide"><label for="clK">Que veux-tu effacer ?</label><select id="clK" ${S.can&&!C.busy?'':'disabled'}><option value="">Choisir…</option>${grp('mo','Main d’œuvre')}${grp('liv','Stock (livraisons)')}${grp('so','Sorties de matériel')}</select></div>
+      ${def&&def[3]?`<div class="wide"><label for="clV">${def[2]}</label><select id="clV" ${S.can&&!C.busy?'':'disabled'}><option value="">Choisir…</option>${opts.map(o=>{const [val,lab]=Array.isArray(o)?o:[o,o];return `<option value="${esc(val)}" ${C.v===val?'selected':''}>${esc(lab)}</option>`}).join('')}</select>${opts.length?'':'<div class="hint">Rien à choisir pour l’instant.</div>'}</div>`:''}
+    </div>
+    ${pl?`<div class="banner ${pl.n?'err':''}" style="margin-top:12px;display:block"><b>Sera effacé :</b> ${esc(pl.parts.join(', '))}.${pl.warn?`<div style="margin-top:4px">${esc(pl.warn)}</div>`:''}${pl.n?'<div style="margin-top:4px;font-weight:400">Conseil : télécharge d’abord une sauvegarde du projet.</div>':''}</div>
+      <div class="row" style="margin-top:10px;gap:8px"><button class="btn" id="clSave" ${C.busy?'disabled':''}>Télécharger une sauvegarde</button>
+      <button class="btn" id="clGo" style="border-color:var(--bad);color:var(--bad)" ${pl.n&&S.can&&!C.busy?'':'disabled'}>${C.arm?'Confirmer : effacer '+pl.n+' élément(s)':'Vider'}</button>
+      <button class="btn pri" id="clImp" ${S.can&&!C.busy?'':'disabled'}>${IMPL[pl.imp]}</button></div>`:def?`<div class="row" style="margin-top:10px"><button class="btn pri" id="clImp" ${S.can&&!C.busy?'':'disabled'}>${IMPL[impOf(C.k)]}</button></div>`:''}
+    <div id="clProg" style="margin-top:10px" ${C.busy?'':'hidden'}><div class="prog"><i id="clBar"></i></div><div class="hint" id="clTxt"></div></div>
+    ${C.msg?`<div class="banner" style="margin-top:10px">${esc(C.msg)}</div>`:''}</div>`}
+function wireClean(root){
+  const C=FORM.cl;if(!C)return;
+  const k=$('#clK');if(k)k.onchange=()=>{C.k=k.value;C.v='';C.arm=false;C.msg='';render()};
+  const v=$('#clV');if(v)v.onchange=()=>{C.v=v.value;C.arm=false;C.msg='';render()};
+  const sv=$('#clSave');if(sv)sv.onclick=async()=>{if(await saveProject())toast('Sauvegarde téléchargée')};
+  const im=$('#clImp');if(im)im.onclick=()=>{if(!C.k)return;FORM.imp={type:impOf(C.k),def:{}};location.hash='importer'};
+  const go=$('#clGo');if(go)go.onclick=async()=>{const pl=cleanPlan();if(!pl||!pl.n)return;
+    if(!C.arm){C.arm=true;render();return}
+    C.arm=false;C.busy=true;render();const bar=$('#clBar'),t=$('#clTxt');
+    const fail=await writeMany(pl.items,(d,n)=>{if(bar)bar.style.width=(100*d/n)+'%';if(t)t.textContent=d+' / '+n+' effacés…'});
+    C.busy=false;const n=pl.n;C.msg=fail?(n-fail)+' élément(s) effacés, '+fail+' en échec : recommence.':n+' élément(s) effacés. Tu peux maintenant importer la nouvelle liste avec le bouton « Importer » ci-dessus.';C.v='';render()}}
+
 /* ---------- projet : enregistrer en Excel, vider, réimporter ---------- */
 const PJ={mo:['MainOeuvre',['p','f','date','hj','ts']],sorties:['Sorties',['date','store','waybill','des','unite','ouvrage','qte','lieu','projet','ts']],
-  livraisons:['Livraisons',['date','bc','nom','projet','lieu','des','qte','unite','prf','ts']],postes:['Postes',['f','lin','poste','q','u','max','prix','st','ts']],
+  livraisons:['Livraisons',['date','bc','nom','projet','lieu','des','qte','unite','prf','ts']],postes:['Postes',['f','lin','poste','q','u','max','prix','st','del','ts']],
   designations:['Designations',['d','c','u']],fournisseurs:['Fournisseurs',['nom','hidden','ts']],lieux:['Lieux',['nom','hidden','ts']],projets:['Projets',['nom','hidden','ts']],ouvrages:['Ouvrages',['nom','hidden','ts']],fournMO:['FournisseursMO',['nom','hidden','ts']],quals:['Qualifications',['nom','hidden','rk','ts']],statuts:['Statuts',['nom','auto','hidden','ts']]};
 const PJ_NUM=new Set(['hj','qte','max','prix','ts','rk']);
 function buildWorkbook(){
@@ -1115,11 +1178,13 @@ function viewProjet(){
       :''}
     <div id="pjProg" style="margin-top:10px" ${P2.busy?'':'hidden'}><div class="prog"><i id="pjBar"></i></div><div class="hint" id="pjTxtP"></div></div>
     </div>`:''}
-  <div class="card"><h2>2. Réimporter un projet enregistré</h2>
+  ${viewClean()}
+  <div class="card"><h2>3. Réimporter un projet enregistré</h2>
     <p style="margin:0 0 10px">Choisis un fichier « projet-….xlsx » enregistré plus tôt : tout revient à l’identique (même stock, mêmes lots, mêmes graphiques). Les éléments déjà présents avec le même identifiant sont remplacés, rien n’est dupliqué.</p>
     <input type="file" id="pjFile" accept=".xlsx" ${S.can?'':'disabled'} style="max-width:360px">
     ${P2.err?`<div class="banner err" style="margin-top:10px">${esc(P2.err)}</div>`:''}</div>`}
 function wireProjet(root){
+  wireClean(root);
   const P2=FORM.pj;
   $('#pjSave').onclick=async()=>{if(await saveProject()){P2.msg='Projet enregistré : le fichier est téléchargé et le projet est conservé.';render();toast('Projet enregistré, rien n’est supprimé.')}};
   $('#pjSaveDel').onclick=async()=>{if(!(await saveProject()))return;
