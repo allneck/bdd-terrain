@@ -1066,9 +1066,9 @@ function wireSyncOld(root){
 
 /* ---------- connexion Google : base commune dans Drive, synchronisation dans les deux sens, partage observateur / éditeur ---------- */
 const G=(()=>{let o={};try{o=JSON.parse(localStorage.getItem('bdt-google')||'{}')}catch(e){}
-  return {cid:o.cid||'',email:o.email||'',tok:o.tok||'',exp:o.exp||0,scope:o.scope||'',folderId:o.folderId||'',dataId:o.dataId||'',sheetId:o.sheetId||'',last:o.last||'',later:!!o.later,dirty:!!o.dirty,
+  return {cid:o.cid||'',email:o.email||'',tok:o.tok||'',exp:o.exp||0,scope:o.scope||'',folderId:o.folderId||'',dataId:o.dataId||'',sheetId:o.sheetId||'',last:o.last||'',later:false,dirty:!!o.dirty,
     member:!!o.member,owner:o.owner||'',canEdit:o.canEdit!==false,joinId:o.joinId||'',busy:false,msg:'',ok:true,perms:null,share:{email:'',role:'reader',busy:false,msg:'',ok:true},leaveArm:false}})();
-function saveG(){try{const {busy,msg,ok,perms,share,leaveArm,...k}=G;localStorage.setItem('bdt-google',JSON.stringify(k))}catch(e){}}
+function saveG(){try{const {busy,msg,ok,perms,share,leaveArm,later,...k}=G;localStorage.setItem('bdt-google',JSON.stringify(k))}catch(e){}}
 const SC_OWN='https://www.googleapis.com/auth/drive.file openid email';
 const SC_MEM='https://www.googleapis.com/auth/drive openid email';
 const needScope=()=>(G.member||G.joinId)?SC_MEM:SC_OWN;
