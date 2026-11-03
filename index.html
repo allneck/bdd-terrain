@@ -35,6 +35,14 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1
 .wrap{max-width:1120px;margin:0 auto}
 header.top{margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)));padding:18px max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));background:var(--accent);color:var(--accent-ink)}
 header.top .in{max-width:1120px;margin:0 auto}
+#gbadge{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 2px;font-size:13px}#gbadge:empty{display:none}
+.gb-pill{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:4px 12px;border-radius:999px;background:rgba(255,255,255,.16);color:inherit;border:1px solid rgba(255,255,255,.28);font:inherit;font-size:13px;cursor:pointer;text-decoration:none;max-width:100%;overflow-wrap:anywhere;text-align:left}
+.gb-pill:hover{background:rgba(255,255,255,.26)}
+.gb-dot{width:9px;height:9px;border-radius:50%;background:#B9B6CC;flex:none}
+.gb-on .gb-dot{background:#3DDC84;box-shadow:0 0 0 3px rgba(61,220,132,.3)}.gb-exp .gb-dot{background:#F5A524}
+.gb-av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:700;background:#fff;color:#51449E;position:relative;margin-right:-2px}
+.gb-av::after{content:'';position:absolute;right:-2px;bottom:-2px;width:8px;height:8px;border-radius:50%;background:#3DDC84;border:2px solid #51449E}
+.pres-on{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--accent-soft);margin:2px 4px 2px 0}
 h1{font-family:var(--f-display);font-size:26px;line-height:1.15;margin:0;font-weight:700;text-wrap:balance}
 header.top p{margin:4px 0 0;font-size:13px;opacity:.85}
 nav.tabs{display:flex;gap:2px;overflow-x:auto;margin-top:14px;scrollbar-width:none}
@@ -138,6 +146,7 @@ svg.ch line.g{stroke:var(--line)}
 <header class="top"><div class="in">
   <h1>Base de données terrain</h1>
   <p>Matériel, livraisons, stock par projet et main d’œuvre · WASH Urgence</p>
+  <div id="gbadge"></div>
   <div id="projbar"></div>
   <nav class="tabs" role="tablist" id="tabs"></nav>
 </div></header>
@@ -821,14 +830,17 @@ function viewImporter(){
     <div class="seg" id="iType">${Object.entries(IMP).map(([k,v])=>`<button data-t="${k}" aria-pressed="${I.type===k}">${v.title}</button>`).join('')}</div>
     <p class="hint" style="margin:10px 0">${def.hint}</p>
     <div class="row"><input type="file" id="iFile" accept=".xlsx,.xls,.csv,.txt" style="max-width:360px"><button class="btn sm" id="iTpl">Télécharger un modèle CSV</button></div>
+    ${I.sheets&&!I.rows&&I.fname?`<div class="banner" style="margin-top:10px">Fichier « ${esc(I.fname)} » toujours chargé${(I.done||[]).length?' (déjà importé : '+esc(I.done.join(', '))+')':''}. Choisis un autre type ci-dessus pour importer la suite, ou un autre fichier.</div>`:''}
     ${I.err?`<div class="banner err" style="margin-top:10px">${esc(I.err)}</div>`:''}
     <p class="hint" style="margin:10px 0 0">Fichiers Excel (.xlsx, .xls) et CSV. Pour un PDF ou un scan, envoyez-le à Claude dans la conversation : il le convertit en lignes prêtes à importer.</p></div>
   ${defs}${body}`}
 function loadSheet(I,name){I.sheet=name;I.rows=I.sheets[name];const a=autoMap(I.rows,I.type);I.h=a.h;I.map=a.map}
 function wireImporter(root){
   const I=FORM.imp;
-  root.querySelectorAll('#iType button').forEach(b=>b.onclick=()=>{I.type=b.dataset.t;I.rows=null;I.sheets=null;I.err='';I.def={};render()});
-  $('#iFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;I.err='';
+  root.querySelectorAll('#iType button').forEach(b=>b.onclick=()=>{I.type=b.dataset.t;I.rows=null;I.err='';I.def={};
+    if(I.sheets){let best=Object.keys(I.sheets)[0],bs=-1;Object.keys(I.sheets).forEach(n=>{const a=autoMap(I.sheets[n],I.type);if(a.score>bs){bs=a.score;best=n}});loadSheet(I,best)}
+    render()});
+  $('#iFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;I.err='';I.fname=f.name;I.done=[];
     try{I.sheets=await readSheets(f);const names=Object.keys(I.sheets).filter(n=>I.sheets[n].length);if(!names.length)throw new Error('Le fichier est vide.');
       // feuille la plus adaptée
       let best=names[0],bs=-1;names.forEach(n=>{const a=autoMap(I.sheets[n],I.type);if(a.score>bs){bs=a.score;best=n}});
@@ -849,9 +861,9 @@ function wireImporter(root){
       ['fournisseurs:nom','projets:projet','lieux:lieu'].forEach(x=>{const [c,k]=x.split(':');const have=new Set(names(c).map(dkey));uniq(recs.map(r=>r.d[k])).forEach(n=>{if(!have.has(dkey(n))){have.add(dkey(n));add.push({c,id:slug(n),d:{nom:n,ts:Date.now()}})}})});
       if(add.length)await writeMany(add,()=>{})}
     if(I.type==='postes')for(const fo of uniq(recs.map(r=>r.d.f)))await showFournMO(fo);
-    I.busy=false;I.rows=null;I.sheets=null;
+    I.busy=false;I.rows=null;I.done=(I.done||[]).concat([IMP[I.type].title]);
     toast(fail?`${recs.length-fail} ligne(s) importée(s), ${fail} en échec.`:recs.length+' ligne(s) importée(s).');render()};
-  const rs=$('#iReset');if(rs)rs.onclick=()=>{I.rows=null;I.sheets=null;I.err='';render()}}
+  const rs=$('#iReset');if(rs)rs.onclick=()=>{I.rows=null;I.sheets=null;I.fname='';I.done=[];I.err='';render()}}
 async function writeMany(items,onProg){
   let i=0,done=0,fail=0;
   const worker=async()=>{while(i<items.length){const it=items[i++];let tries=0;
@@ -881,13 +893,17 @@ function renderProjBar(){
   $('#wpNew').onclick=()=>{FORM.pd=null;FORM.pe={mode:'new',nom:'',bail:[],lig:[]};render();const n=$('#peNom');if(n)n.focus()}}
 function viewProjPanel(){
   const e=FORM.pe,tags=(arr,k)=>arr.map((x,i)=>`<span class="tag">${esc(x)}<button data-pr="${k}:${i}" aria-label="Retirer ${esc(x)}">×</button></span>`).join('');
-  return `<div class="card" id="projpanel"><h2>${e.mode==='new'?'Créer un projet (il démarre vide)':'Renommer le projet'}</h2>
+  return `<div class="card" id="projpanel"><h2>${e.mode==='new'?'Créer un projet':'Renommer le projet'}</h2>
     <div class="form">
       <div class="wide"><label for="peNom">Nom du projet</label><input id="peNom" value="${esc(e.nom)}" autocomplete="off" placeholder="ex. Fonds humanitaires"></div>
       <div class="wide"><label for="peBail">Nom des bailleurs (un par ajout, ou séparés par une virgule)</label><div class="tagl">${tags(e.bail,'bail')}</div><div class="row nw"><input id="peBail" autocomplete="off"><button class="btn sm" data-pa="bail">Ajouter</button></div></div>
       <div class="wide"><label for="peLig">Codes de ligne</label><div class="tagl">${tags(e.lig,'lig')}</div><div class="row nw"><input id="peLig" autocomplete="off"><button class="btn sm" data-pa="lig">Ajouter</button></div></div>
+      ${e.mode==='new'?`<div class="wide"><label for="peFile">Partir d’un fichier (facultatif)</label><input type="file" id="peFile" accept=".xlsx,.xls,.csv,.txt" style="max-width:360px" ${e.busy?'disabled':''}>
+        <span class="hint" style="display:block;margin-top:6px">Sans fichier, le projet démarre vide. Un projet enregistré par l’application (fichier « projet-….xlsx ») est recréé tel quel. Un Excel préparé à ta façon passe ensuite par l’onglet Importer pour vérifier les colonnes.</span>
+        ${e.fileErr?`<div class="banner err" style="margin-top:8px">${esc(e.fileErr)}</div>`:''}
+        ${e.file?`<div class="banner" style="margin-top:8px">${e.file.kind==='saved'?`<b>Projet enregistré reconnu</b> (${esc(e.file.name)}) : ${esc(e.file.sum)}. Tout sera recréé dans le nouveau projet.`:`<b>Excel préparé</b> (${esc(e.file.name)}) : ${esc(e.file.sum)}. Après la création, tu vérifies les colonnes puis tu importes.`} <button class="btn sm" id="peFileX" style="margin-left:6px">Retirer le fichier</button></div>`:''}</div>`:''}
     </div>
-    <div class="row" style="margin-top:14px"><button class="btn pri" id="peOk">${e.mode==='new'?'Créer le projet':'Enregistrer'}</button><button class="btn" id="peNo">Annuler</button></div></div>`}
+    <div class="row" style="margin-top:14px"><button class="btn pri" id="peOk" ${e.busy?'disabled':''}>${e.mode==='new'?(e.file?(e.file.kind==='saved'?'Créer le projet et importer '+e.file.n+' éléments':'Créer le projet et vérifier le fichier'):'Créer le projet'):'Enregistrer'}</button><button class="btn" id="peNo">Annuler</button></div></div>`}
 function wireProjPanel(root){
   const e=FORM.pe,nom=$('#peNom');nom.oninput=()=>{e.nom=nom.value};
   const add=k=>{const i=$(k==='bail'?'#peBail':'#peLig');const parts=i.value.split(/[,;]/).map(x=>x.trim()).filter(Boolean);
@@ -896,15 +912,30 @@ function wireProjPanel(root){
   [['#peBail','bail'],['#peLig','lig']].forEach(([id,k])=>$(id).onkeydown=ev=>{if(ev.key==='Enter'){ev.preventDefault();add(k)}});
   root.querySelectorAll('[data-pr]').forEach(b=>b.onclick=()=>{const [k,i]=b.dataset.pr.split(':');e[k].splice(+i,1);render()});
   $('#peNo').onclick=()=>{FORM.pe=null;render()};
+  const pf=$('#peFile');if(pf)pf.onchange=async ev=>{const fl=ev.target.files[0];if(!fl)return;e.fileErr='';e.file=null;
+    try{e.file=await readProjectFile(fl);
+      if(e.file.kind==='saved'){const m=e.file.meta;if(!(e.nom||'').trim()&&m.nom)e.nom=wpList().some(w=>dkey(w.nom)===dkey(m.nom))?m.nom+' (copie)':m.nom;
+        (m.bailleurs||[]).forEach(p=>{if(!e.bail.some(x=>dkey(x)===dkey(p)))e.bail.push(p)});(m.lignes||[]).forEach(p=>{if(!e.lig.some(x=>dkey(x)===dkey(p)))e.lig.push(p)})}
+      else if(!(e.nom||'').trim())e.nom=fl.name.replace(/\.[^.]+$/,'')}
+    catch(er){e.fileErr=er.message||'Lecture impossible.'}
+    render()};
+  const px=$('#peFileX');if(px)px.onclick=()=>{e.file=null;e.fileErr='';render()};
   $('#peOk').onclick=async()=>{
     // prendre en compte ce qui est tapé sans avoir cliqué sur Ajouter
     [['#peBail','bail'],['#peLig','lig']].forEach(([id,k])=>{$(id).value.split(/[,;]/).map(x=>x.trim()).filter(Boolean).forEach(p=>{if(!e[k].some(x=>dkey(x)===dkey(p)))e[k].push(p)})});
     const n=(e.nom||'').trim();if(!n){toast('Donnez un nom au projet.');nom.focus();return}
     if(wpList().some(w=>dkey(w.nom)===dkey(n)&&!(e.mode==='edit'&&w.id===WP))){toast('Un projet porte déjà ce nom.');return}
-    const id=e.mode==='new'?'p'+Date.now().toString(36):WP,old=S.wps.find(w=>w.id===id);
+    if(e.busy)return;const id=e.mode==='new'?'p'+Date.now().toString(36):WP,old=S.wps.find(w=>w.id===id);
     try{await S.dbRaw.collection('wprojets').doc(id).set({nom:n,bailleurs:e.bail,lignes:e.lig,ts:old?old.ts||Date.now():(id==='p0'?1:Date.now())});
       const mode=e.mode;FORM.pe=null;
-      if(mode==='new'){S.wps=S.wps.filter(w=>w.id!==id).concat([{id,nom:n,bailleurs:e.bail,lignes:e.lig,ts:Date.now()}]);setWP(id);toast('Projet « '+n+' » créé : il est vide.')}
+      if(mode==='new'){S.wps=S.wps.filter(w=>w.id!==id).concat([{id,nom:n,bailleurs:e.bail,lignes:e.lig,ts:Date.now()}]);setWP(id);
+        const fi=e.file;
+        if(!fi)toast('Projet « '+n+' » créé : il est vide.');
+        else if(fi.kind==='saved'){const items=savedItems(fi.raw);toast('Projet « '+n+' » créé. Import de '+items.length+' éléments…');
+          const fail=await writeMany(items,(d,k)=>{if(d%25===0||d===k)toast('Import : '+d+' / '+k+' éléments…')});
+          toast(fail?(items.length-fail)+' éléments importés, '+fail+' en échec : réessayez avec Projet > Réimporter.':'Projet « '+n+' » créé avec '+items.length+' éléments.')}
+        else{const I=FORM.imp={type:fi.type,def:{},sheets:fi.sheets,fname:fi.name};loadSheet(I,fi.sheet);location.hash='importer';
+          toast('Projet « '+n+' » créé. Vérifie les colonnes puis importe.')}}
       else{S.wps=S.wps.filter(w=>w.id!==id).concat([{id,nom:n,bailleurs:e.bail,lignes:e.lig,ts:id==='p0'?1:(old&&old.ts)||Date.now()}]);render();toast('Projet enregistré')}}
     catch(er){toast('Enregistrement impossible : '+(er.message||er.code))}}}
 
@@ -934,6 +965,38 @@ function wireDelPanel(root){
       if(!S.wps.some(x=>!x.deleted)){nid='p'+Date.now().toString(36);const nw={nom:'Nouveau projet',bailleurs:[],lignes:[],ts:Date.now()};await S.dbRaw.collection('wprojets').doc(nid).set(nw);S.wps=S.wps.filter(x=>x.id!==nid).concat([{id:nid,...nw}])}
     }catch(e){d.busy=false;toast('Suppression du projet impossible.');render();return}
     FORM.pd=null;setWP(nid||wpList()[0].id);toast('Projet « '+w.nom+' » supprimé.'+(nid?' Un nouveau projet vide a été créé.':''))}}
+
+/* ---------- créer un projet depuis un fichier ---------- */
+function parseSavedWb(wb){
+  const isSaved=Object.values(PJ).some(([name])=>{const ws=wb.Sheets[name];if(!ws)return false;const r=XLSX.utils.sheet_to_json(ws,{header:1,defval:''})[0]||[];return String(r[0]).trim()==='id'});
+  if(!isSaved)return null;
+  const raw=[];Object.entries(PJ).forEach(([c,[name,cols]])=>{const ws=wb.Sheets[name];if(!ws)return;
+    XLSX.utils.sheet_to_json(ws,{defval:''}).forEach(r=>{const id=String(r.id||'').trim().replace(/^[^~]*~/,'');if(!id)return;const d={};
+      cols.forEach(k=>{let v=r[k];if(v===''||v==null)return;if(PJ_NUM.has(k))v=num(v);else if(k==='hidden')v=(v===true||/^(true|vrai|1)$/i.test(String(v)));else v=String(v);d[k]=v});
+      raw.push({c,id,d})})});
+  const meta={};const rs=wb.Sheets.Resume;if(rs)XLSX.utils.sheet_to_json(rs,{header:1,defval:''}).forEach(r=>{const k=String(r[0]).trim(),v=String(r[1]??'').trim();
+    if(k==='Projet')meta.nom=v;if(k==='Bailleur(s)')meta.bailleurs=v.split(',').map(x=>x.trim()).filter(Boolean);if(k==='Codes de ligne')meta.lignes=v.split(',').map(x=>x.trim()).filter(Boolean)});
+  return {raw,meta}}
+function savedItems(raw){const out=raw.map(({c,id,d})=>{const x={...d};if(c==='mo'&&x.p){x.p=String(x.p).replace(/^[^~]*~/,'');if(WP!=='p0')x.p=WP+'~'+x.p}return {c,id,d:x}});
+  /* les postes de départ intégrés à la page ne sont pas dans le fichier : on les recopie s'ils servent aux saisies */
+  if(WP!=='p0'&&BASE_P.length){const have=new Set(raw.filter(x=>x.c==='postes').map(x=>x.id)),need=new Set(raw.filter(x=>x.c==='mo'&&x.d.p).map(x=>String(x.d.p).replace(/^[^~]*~/,'')));
+    BASE_P.forEach(p=>{if(need.has(p.id)&&!have.has(p.id))out.push({c:'postes',id:p.id,d:{f:p.f,lin:p.lin||'',poste:p.poste,q:p.q,u:p.u||'',max:p.max,prix:p.prix,ts:Date.now()}})})}
+  return out}
+async function readProjectFile(fl){
+  const nm=fl.name.toLowerCase();
+  if(/\.xlsx?$/.test(nm)){
+    if(!window.XLSX)throw new Error('La lecture des fichiers Excel n’est pas disponible (connexion). Réessaie avec internet.');
+    const wb=XLSX.read(await fl.arrayBuffer(),{type:'array',cellDates:true});const sv=parseSavedWb(wb);
+    if(sv){if(!sv.raw.length)throw new Error('Ce projet enregistré ne contient aucune donnée.');
+      const cnt={};sv.raw.forEach(x=>{cnt[x.c]=(cnt[x.c]||0)+1});
+      const LB={livraisons:'livraisons',sorties:'sorties',mo:'saisies de main d’œuvre',postes:'postes',designations:'désignations',fournisseurs:'fournisseurs',lieux:'lieux',projets:'projets',ouvrages:'ouvrages',fournMO:'fournisseurs MO'};
+      return {kind:'saved',name:fl.name,raw:sv.raw,meta:sv.meta,n:sv.raw.length,mo:!!cnt.postes,fourn:uniq(sv.raw.filter(x=>x.c==='postes').map(x=>x.d.f).filter(Boolean)),
+        sum:Object.entries(cnt).map(([c,k])=>k+' '+(LB[c]||c)).join(', ')}}}
+  const sheets=await readSheets(fl);const names0=Object.keys(sheets).filter(k=>sheets[k].length);if(!names0.length)throw new Error('Le fichier est vide.');
+  const sh=Object.fromEntries(names0.map(k=>[k,sheets[k]]));let best={type:'livraisons',sheet:names0[0],score:-1};
+  const HINT={livraisons:/livr|recept|entree/,sorties:/sorti|consomm|sortie/,postes:/poste|main|oeuvre|mo\b/,designations:/design|article|catalog/};
+  ['livraisons','sorties','postes','designations'].filter(t=>IMP[t]).forEach(t=>names0.forEach(k=>{const a=autoMap(sh[k],t);const sc=a.score+(HINT[t].test(norm(k+' '+fl.name))?3:0);if(sc>best.score)best={type:t,sheet:k,score:sc}}));
+  return {kind:'prep',name:fl.name,sheets:sh,type:best.type,sheet:best.sheet,sum:names0.length+' feuille(s), type détecté : '+IMP[best.type].title+(names0.length>1?' (feuille « '+best.sheet+' »)':'')}}
 
 /* ---------- projet : enregistrer en Excel, vider, réimporter ---------- */
 const PJ={mo:['MainOeuvre',['p','f','date','hj','ts']],sorties:['Sorties',['date','store','waybill','des','unite','ouvrage','qte','lieu','projet','ts']],
@@ -1001,13 +1064,9 @@ function wireProjet(root){
     P2.busy=false;P2.saved=false;P2.txt='';P2.msg=fail?fail+' élément(s) n’ont pas pu être supprimés. Recommencez.':'Base remise à zéro. Importez un nouveau fichier ou réimportez un projet enregistré.';render()};
   $('#pjFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;P2.err='';
     try{if(!window.XLSX)throw new Error('Lecture Excel indisponible (connexion).');
-      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const items=[];
-      if(!wb.SheetNames.includes('Livraisons')&&!wb.SheetNames.includes('Sorties')&&!wb.SheetNames.includes('Resume'))throw new Error('Ce fichier n’est pas un projet enregistré par cette page.');
-      Object.entries(PJ).forEach(([c,[name,cols]])=>{const ws=wb.Sheets[name];if(!ws)return;
-        XLSX.utils.sheet_to_json(ws,{defval:''}).forEach(r=>{const id=String(r.id||'').trim().replace(/^[^~]*~/,'');if(!id)return;const d={};
-          cols.forEach(k=>{let v=r[k];if(v===''||v==null)return;if(PJ_NUM.has(k))v=num(v);else if(k==='hidden')v=(v===true||/^(true|vrai|1)$/i.test(String(v)));else v=String(v);d[k]=v});
-          if(c==='mo'&&d.p){d.p=String(d.p).replace(/^[^~]*~/,'');if(WP!=='p0')d.p=WP+'~'+d.p}
-          items.push({c,id,d})})});
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});const sv=parseSavedWb(wb);
+      if(!sv)throw new Error('Ce fichier n’est pas un projet enregistré par cette page. Pour un Excel préparé, utilisez l’onglet Importer.');
+      const items=savedItems(sv.raw);
       if(!items.length)throw new Error('Aucune donnée trouvée dans ce fichier.');
       P2.busy=true;render();const bar=$('#pjBar'),t2=$('#pjTxtP');
       const fail=await writeMany(items,(d,n)=>{if(bar)bar.style.width=(100*d/n)+'%';if(t2)t2.textContent=d+' / '+n+' lignes importées…'});
@@ -1067,7 +1126,7 @@ function wireSyncOld(root){
 /* ---------- connexion Google : base commune dans Drive, synchronisation dans les deux sens, partage observateur / éditeur ---------- */
 const G=(()=>{let o={};try{o=JSON.parse(localStorage.getItem('bdt-google')||'{}')}catch(e){}
   return {cid:o.cid||'',email:o.email||'',tok:o.tok||'',exp:o.exp||0,scope:o.scope||'',folderId:o.folderId||'',dataId:o.dataId||'',sheetId:o.sheetId||'',last:o.last||'',later:false,dirty:!!o.dirty,
-    member:!!o.member,owner:o.owner||'',canEdit:o.canEdit!==false,joinId:o.joinId||'',busy:false,msg:'',ok:true,perms:null,share:{email:'',role:'reader',busy:false,msg:'',ok:true},leaveArm:false}})();
+    presId:o.presId||'',member:!!o.member,owner:o.owner||'',canEdit:o.canEdit!==false,joinId:o.joinId||'',busy:false,msg:'',ok:true,perms:null,share:{email:'',role:'reader',busy:false,msg:'',ok:true},leaveArm:false}})();
 function saveG(){try{const {busy,msg,ok,perms,share,leaveArm,later,...k}=G;localStorage.setItem('bdt-google',JSON.stringify(k))}catch(e){}}
 const SC_OWN='https://www.googleapis.com/auth/drive.file openid email';
 const SC_MEM='https://www.googleapis.com/auth/drive openid email';
@@ -1083,7 +1142,7 @@ function loadGsi(){return gsiP||(gsiP=new Promise((res,rej)=>{if(gReady())return
   s.onload=()=>res();s.onerror=()=>{gsiP=null;s.remove();rej(new Error('connexion Google indisponible (réseau)'))};document.head.appendChild(s)}))}
 async function loadCfg(){try{const r=await fetch('config.json',{cache:'no-store'});if(!r.ok)return;const j=await r.json();const id=String(j.googleClientId||'').trim();
   if(/\.apps\.googleusercontent\.com$/.test(id)&&id!==G.cid){G.cid=id;saveG();if(tab==='sync')render()}}catch(e){}}
-function gRefresh(){if(tab==='sync')render();else{const b=$('#gbanner');if(b){b.outerHTML=gBanner();wireGBanner()}}}
+function gRefresh(){renderGBadge();if(tab==='sync')render();else{const b=$('#gbanner');if(b){b.outerHTML=gBanner();wireGBanner()}}}
 /* demande de jeton : appelée directement dans un clic (fenêtre Google) */
 function gLogin(){return new Promise((res,rej)=>{
   if(!G.cid)return rej(new Error('NOCID'));
@@ -1093,7 +1152,7 @@ function gLogin(){return new Promise((res,rej)=>{
     callback:async r=>{if(r.error)return rej(new Error(r.error_description||r.error));
       G.tok=r.access_token;G.scope=scope;G.exp=Date.now()+Math.max(60,(+r.expires_in||3600)-120)*1000;
       try{const u=await (await gfetch('https://openidconnect.googleapis.com/v1/userinfo')).json();
-        if(u.email&&u.email!==G.email){if(!G.member){G.folderId='';G.dataId='';G.sheetId=''}G.email=u.email}}catch(e){}
+        if(u.email&&u.email!==G.email){if(!G.member){G.folderId='';G.dataId='';G.sheetId='';G.presId=''}G.email=u.email}}catch(e){}
       G.later=false;saveG();res()},
     error_callback:e=>rej(new Error(e&&e.type==='popup_closed'?'Connexion annulée.':e&&e.type==='popup_failed_to_open'?'La fenêtre Google est bloquée : autorise les fenêtres pop-up ou ouvre l’application dans Chrome.':(e&&e.message)||'Connexion impossible.'))});
   tc.requestAccessToken({prompt:(G.email&&G.scope===scope)?'':'consent'})})}
@@ -1144,8 +1203,8 @@ async function gSync(manual){
   try{
     await LOCALDB.ready;
     /* rejoindre une base partagée */
-    if(G.joinId){const prev={member:G.member,dataId:G.dataId,sheetId:G.sheetId,folderId:G.folderId};
-      Object.assign(G,{member:true,dataId:G.joinId,sheetId:'',folderId:'',joinId:''});
+    if(G.joinId){const prev={member:G.member,dataId:G.dataId,sheetId:G.sheetId,presId:G.presId,folderId:G.folderId};
+      Object.assign(G,{member:true,dataId:G.joinId,sheetId:'',presId:'',folderId:'',joinId:''});
       try{await gCheckMember()}catch(e){Object.assign(G,prev);G.joinId='';saveG();applyRole();if(e.message==='NOACCESS')throw new Error('Cette base n’est pas partagée avec '+G.email+'. Demande au propriétaire de la partager avec cette adresse');throw e}
       G.last='';saveG();render()}
     if(G.member){try{await gCheckMember()}catch(e){if(e.message==='NOACCESS'){G.ok=false;G.msg='Ton accès à la base de '+(G.owner||'ce propriétaire')+' a été retiré. Les données restent affichées sur ce téléphone.';G.busy=false;G.canEdit=false;applyRole();saveG();render();return}throw e}}
@@ -1153,10 +1212,11 @@ async function gSync(manual){
       if(!G.folderId)G.folderId=await gFind('folder');
       if(!G.folderId)G.folderId=await gCreate({name:'Base de données terrain',mimeType:'application/vnd.google-apps.folder',appProperties:{bdt:'folder'}});
       if(!G.dataId)G.dataId=await gFind('data');saveG();
-      try{await gEnsureSheet()}catch(e){if(e.message==='AUTH')throw e}}
+      try{await gEnsureSheet()}catch(e){if(e.message==='AUTH')throw e}
+      try{if(!G.presId)G.presId=await gFind('presence');if(!G.presId){G.presId=await gCreate({name:'base-terrain-presence',mimeType:'application/json',parents:[G.folderId],appProperties:{bdt:'presence'},description:'Passages des personnes invitées. Ne pas modifier.'});saveG()}}catch(e){if(e.message==='AUTH')throw e}}
     let remote={docs:{}};
     if(G.dataId){try{remote=await (await gfetch(`${DRV}/${G.dataId}?alt=media`)).json()}catch(e){if(e.status===404&&!G.member)G.dataId='';else throw e}}
-    const rd=(remote&&remote.docs)||{};if(G.member&&remote&&remote.sheetId)G.sheetId=remote.sheetId;
+    const rd=(remote&&remote.docs)||{};if(G.member&&remote&&remote.sheetId)G.sheetId=remote.sheetId;if(G.member&&remote&&remote.presId)G.presId=remote.presId;
     let nIn=0,nOut=0;
     if(isRO()){
       /* observateur : le téléphone devient une copie exacte de la base */
@@ -1168,14 +1228,15 @@ async function gSync(manual){
         if(a&&(!b||a.m>b.m)){merged[k]=a;nOut++}else{merged[k]=b;if(!a||a.m<b.m)toLocal[k]=b}});
       nIn=Object.keys(toLocal).length;
       if(nIn)await LOCALDB.apply(toLocal);
-      if(nOut||!G.dataId||(!G.member&&remote.sheetId!==G.sheetId))await gUpload({app:'bdt',v:1,saved:new Date().toISOString(),by:G.email,sheetId:G.member?(remote.sheetId||''):G.sheetId,docs:merged});
+      if(nOut||!G.dataId||(!G.member&&(remote.sheetId!==G.sheetId||(remote.presId||'')!==G.presId)))await gUpload({app:'bdt',v:1,saved:new Date().toISOString(),by:G.email,sheetId:G.member?(remote.sheetId||''):G.sheetId,presId:G.member?(remote.presId||''):G.presId,docs:merged});
     }
     G.dirty=false;G.last=new Date().toLocaleString('fr-FR');
     let rep='';
     if(!isRO()&&G.sheetId&&(nIn||nOut||!G.member)){try{await new Promise(r=>setTimeout(r,60));rebuildRef();await gReport(exportSheets())}catch(e){if(e.message==='AUTH')throw e;rep=' Le tableau Google Sheets n’a pas pu être mis à jour ('+e.message+').'}}
     G.ok=!rep;G.msg='Synchronisation réussie : '+nIn+' élément(s) reçu(s)'+(isRO()?'':', '+nOut+' envoyé(s)')+'.'+rep;
     if(manual)toast(nIn||nOut?'Synchronisé : '+nIn+' reçu(s)'+(isRO()?'':', '+nOut+' envoyé(s)'):'Synchronisé : tout est à jour');
-    if(!G.member&&tab==='sync'&&G.perms===null)gPerms()}
+    if(!G.member&&tab==='sync'&&G.perms===null)gPerms();
+    pBeat();pPoll()}
   catch(e){G.ok=false;G.dirty=!isRO();
     G.msg=e.message==='AUTH'?'La session Google a expiré : appuie sur « Synchroniser maintenant » pour te reconnecter.':navigator.onLine===false?'Connexion perdue pendant la synchronisation. Rien n’est perdu : réessaie quand le réseau revient.':'Échec : '+e.message+'.'}
   G.busy=false;saveG();gRefresh()}
@@ -1186,22 +1247,24 @@ function gClick(){
   gLogin().then(()=>gSync(true)).catch(e=>{if(e.message==='NOCID')return;G.ok=false;G.msg=e.message;gRefresh();toast(e.message)})}
 function gLogout(){try{if(G.tok&&gReady())google.accounts.oauth2.revoke(G.tok,()=>{})}catch(e){}
   Object.assign(G,{tok:'',exp:0,scope:'',email:'',perms:null,msg:'Déconnecté. Les données restent sur ce téléphone.',ok:true});
-  if(!G.member)Object.assign(G,{folderId:'',dataId:'',sheetId:'',last:''});saveG();render()}
+  if(!G.member)Object.assign(G,{folderId:'',dataId:'',sheetId:'',presId:'',last:''});PRES.online=[];saveG();render()}
 async function gLeave(){
   if(!G.leaveArm){G.leaveArm=true;render();return}
   window.__ro=false;try{await LOCALDB.replaceAll({})}catch(e){}
-  Object.assign(G,{member:false,owner:'',canEdit:true,dataId:'',sheetId:'',folderId:'',last:'',dirty:false,leaveArm:false,joinId:'',tok:'',exp:0,scope:'',msg:'Tu as quitté la base partagée. Ce téléphone est vide.',ok:true});applyRole();saveG();render()}
+  Object.assign(G,{member:false,owner:'',canEdit:true,dataId:'',sheetId:'',presId:'',folderId:'',last:'',dirty:false,leaveArm:false,joinId:'',tok:'',exp:0,scope:'',msg:'Tu as quitté la base partagée. Ce téléphone est vide.',ok:true});applyRole();saveG();render()}
 /* ---- partage (propriétaire) ---- */
 const ROLE_FR={reader:'Observateur',commenter:'Observateur',writer:'Éditeur',owner:'Propriétaire'};
 async function gPerms(){
   if(G.member||!G.dataId||!tokOk())return;
   try{const j=await (await gfetch(`${DRV}/${G.dataId}/permissions?fields=permissions(id,emailAddress,role,type,displayName)`)).json();
-    G.perms=(j.permissions||[]).filter(p=>p.role!=='owner'&&p.type==='user')}catch(e){G.perms=[];G.share.ok=false;G.share.msg='Liste des accès illisible : '+e.message}
+    G.perms=(j.permissions||[]).filter(p=>p.role!=='owner'&&p.type==='user');
+    if(G.presId&&G.perms.length){try{const pj=await (await gfetch(`${DRV}/${G.presId}/permissions?fields=permissions(emailAddress,role)`)).json();const have=new Set((pj.permissions||[]).filter(p=>p.role==='writer'||p.role==='owner').map(p=>(p.emailAddress||'').toLowerCase()));
+      for(const p of G.perms){const e=(p.emailAddress||'').toLowerCase();if(e&&!have.has(e))try{await gShareFile(G.presId,e,'writer',false)}catch(er){}}}catch(er){}}}catch(e){G.perms=[];G.share.ok=false;G.share.msg='Liste des accès illisible : '+e.message}
   if(tab==='sync')render()}
 async function gShareFile(fid,email,role,notify,msg){
   const u=`${DRV}/${fid}/permissions?sendNotificationEmail=${notify?'true':'false'}`+(notify&&msg?'&emailMessage='+encodeURIComponent(msg):'');
   return gfetch(u,{method:'POST',headers:JH,body:JSON.stringify({type:'user',role,emailAddress:email})})}
-async function gSheetPerm(email){if(!G.sheetId)return null;try{const j=await (await gfetch(`${DRV}/${G.sheetId}/permissions?fields=permissions(id,emailAddress)`)).json();return (j.permissions||[]).find(p=>(p.emailAddress||'').toLowerCase()===email.toLowerCase())||null}catch(e){return null}}
+async function gSheetPerm(email,fid){fid=fid||G.sheetId;if(!fid)return null;try{const j=await (await gfetch(`${DRV}/${fid}/permissions?fields=permissions(id,emailAddress)`)).json();return (j.permissions||[]).find(p=>(p.emailAddress||'').toLowerCase()===email.toLowerCase())||null}catch(e){return null}}
 async function gShare(){
   const sh=G.share,email=sh.email.trim().toLowerCase();
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){toast('Adresse e-mail invalide');return}
@@ -1211,11 +1274,12 @@ async function gShare(){
     const link=inviteLink();
     await gShareFile(G.dataId,email,sh.role,true,`${G.email} te donne accès à sa Base de données terrain (${ROLE_FR[sh.role]}). Ouvre ce lien sur ton téléphone, puis « Se connecter avec Google » : ${link}`);
     if(G.sheetId)try{await gShareFile(G.sheetId,email,sh.role,false)}catch(e){}
+    if(G.presId)try{await gShareFile(G.presId,email,'writer',false)}catch(e){}
     sh.ok=true;sh.msg=email+' a reçu un e-mail avec le lien ('+ROLE_FR[sh.role]+'). N’oublie pas de l’ajouter comme utilisateur test dans la console Google.';sh.email=''}
   catch(e){sh.ok=false;sh.msg='Partage impossible : '+e.message}
   sh.busy=false;await gPerms()}
 async function gSetRole(pid,email,role){
-  try{if(role==='remove'){await gfetch(`${DRV}/${G.dataId}/permissions/${pid}`,{method:'DELETE'});const sp=await gSheetPerm(email);if(sp)await gfetch(`${DRV}/${G.sheetId}/permissions/${sp.id}`,{method:'DELETE'});toast('Accès retiré à '+email)}
+  try{if(role==='remove'){await gfetch(`${DRV}/${G.dataId}/permissions/${pid}`,{method:'DELETE'});const sp=await gSheetPerm(email);if(sp)await gfetch(`${DRV}/${G.sheetId}/permissions/${sp.id}`,{method:'DELETE'});const pp=await gSheetPerm(email,G.presId);if(pp)await gfetch(`${DRV}/${G.presId}/permissions/${pp.id}`,{method:'DELETE'});toast('Accès retiré à '+email)}
     else{await gfetch(`${DRV}/${G.dataId}/permissions/${pid}`,{method:'PATCH',headers:JH,body:JSON.stringify({role})});const sp=await gSheetPerm(email);if(sp)await gfetch(`${DRV}/${G.sheetId}/permissions/${sp.id}`,{method:'PATCH',headers:JH,body:JSON.stringify({role})});toast(email+' : '+ROLE_FR[role])}}
   catch(e){toast('Modification impossible : '+e.message)}
   await gPerms()}
@@ -1272,6 +1336,7 @@ function viewSync(){
     <p class="hint" style="margin:12px 0 0">${G.last?'Dernière synchronisation : '+esc(G.last)+'. ':''}${G.dirty&&on&&!isRO()?'Des modifications attendent d’être envoyées. ':''}${G.sheetId?`<a href="https://docs.google.com/spreadsheets/d/${esc(G.sheetId)}" target="_blank" rel="noopener">Ouvrir le tableau Google Sheets</a>`:''}</p>
     <p class="hint" style="margin:8px 0 0">La synchronisation se fait seule à l’ouverture, après chaque saisie et quand le réseau revient, tant que la session Google est active (environ une heure). Après, un appui sur « Synchroniser maintenant » suffit.</p></div>
   ${viewShare()}
+  ${viewPresence()}
   ${G.member?'':`<details class="card"><summary style="cursor:pointer;font-weight:600">Ancienne méthode : script Google (envoi seulement)</summary><div style="margin-top:12px">${viewSyncOld()}</div></details>`}`}
 function wireSync(root){
   const g=$('#gGo');if(g)g.onclick=gClick;const o=$('#gOut');if(o)o.onclick=gLogout;const lv=$('#gLeave');if(lv)lv.onclick=gLeave;
@@ -1282,6 +1347,50 @@ function wireSync(root){
     root.querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>{if(b.dataset.arm){gSetRole(b.dataset.prm,b.dataset.pmail,'remove')}else{b.dataset.arm='1';b.textContent='Confirmer'}});
     if(G.perms===null&&tokOk()&&!G._pl){G._pl=1;gPerms().finally(()=>{G._pl=0})}}
   if(document.querySelector('#syUrl'))wireSyncOld(root)}
+
+/* ---- badge de connexion (en haut, sur tous les onglets) ---- */
+function renderGBadge(){const el=$('#gbadge');if(!el||!window.LOCAL)return;
+  const ok=tokOk(),on=!!G.email;let h='';
+  if(!on)h=`<button class="gb-pill" id="gbBadge" title="Ouvrir l’onglet Google Drive"><span class="gb-dot"></span>Non connecté à Google</button>`;
+  else{const who=esc(G.email)+(G.member?` · ${G.canEdit?'Éditeur':'Observateur'} de la base de ${esc(G.owner||'?')}`:'');
+    h=ok?`<button class="gb-pill gb-on" id="gbBadge" title="Ouvrir l’onglet Google Drive"><span class="gb-dot"></span>Connecté : ${who}${G.busy?' · synchronisation…':''}</button>`
+      :`<button class="gb-pill gb-exp" id="gbBadge" title="Appuie pour te reconnecter"><span class="gb-dot"></span>Session expirée (${who}) · appuie pour te reconnecter</button>`;
+    if(G.sheetId)h+=`<a class="gb-pill" href="https://docs.google.com/spreadsheets/d/${esc(G.sheetId)}" target="_blank" rel="noopener">Ouvrir Google Sheets ↗</a>`;
+    if(!G.member&&PRES.online.length)h+=`<button class="gb-pill" id="gbPres" title="${esc(PRES.online.map(o=>o.email).join(', '))}">${PRES.online.slice(0,5).map(o=>`<span class="gb-av" title="${esc(o.email)}">${esc(pIni(o.email))}</span>`).join('')}${PRES.online.length} en ligne</button>`}
+  el.innerHTML=h;
+  const b=$('#gbBadge');if(b)b.onclick=()=>{if(on&&!ok)gClick();else location.hash='sync'};
+  const p=$('#gbPres');if(p)p.onclick=()=>{location.hash='sync';setTimeout(()=>{const c=$('#prescard');if(c)c.scrollIntoView({behavior:'smooth'})},150)}}
+/* ---- présence des invités : chacun note ses passages dans un petit fichier partagé (propriétés du fichier, une par personne) ---- */
+const PRES=(()=>{let h=[],m=null;try{h=JSON.parse(localStorage.getItem('bdt-pres-hist')||'[]')}catch(e){}try{m=JSON.parse(localStorage.getItem('bdt-pres-my')||'null')}catch(e){}return {online:[],hist:h,my:m,last:0}})();
+const pIni=e=>{const n=String(e).split('@')[0].replace(/[^a-zA-Z]/g,'');return (n.slice(0,2)||'?').toUpperCase()};
+const pKey=e=>'u_'+String(e).toLowerCase().replace(/[^a-z0-9._@-]/g,'_').slice(0,60);
+function pEnc(role,ss,max){let v=role;for(const [s,d] of ss){const p=';'+Math.floor(s/1000).toString(36)+','+Math.round(d/1000).toString(36);if(new TextEncoder().encode(v+p).length>max)break;v+=p}return v}
+function pDec(v){const [r,...ps]=String(v||'').split(';');return {role:r==='w'?'writer':'reader',ss:ps.map(x=>{const [a,b]=x.split(',');return [parseInt(a,36)*1000,(parseInt(b,36)||0)*1000]}).filter(x=>x[0]>0)}}
+async function pBeat(){
+  if(!G.member||!G.presId||!tokOk()||document.visibilityState!=='visible'||navigator.onLine===false)return;
+  const now=Date.now();const my=PRES.my&&PRES.my.base===G.dataId&&PRES.my.email===G.email?PRES.my:{base:G.dataId,email:G.email,ss:[]};
+  const cur=my.ss[0];if(cur&&now-(cur[0]+cur[1])<5*60000)cur[1]=now-cur[0];else my.ss.unshift([now,0]);
+  my.ss=my.ss.slice(0,8);PRES.my=my;try{localStorage.setItem('bdt-pres-my',JSON.stringify(my))}catch(e){}
+  const key=pKey(G.email);
+  try{await gfetch(`${DRV}/${G.presId}?fields=id`,{method:'PATCH',headers:JH,body:JSON.stringify({appProperties:{[key]:pEnc(G.canEdit?'w':'r',my.ss,124-key.length)}})})}catch(e){}}
+async function pPoll(){
+  if(G.member||!G.presId||!tokOk()||navigator.onLine===false)return;
+  try{const j=await (await gfetch(`${DRV}/${G.presId}?fields=appProperties`)).json();const ap=j.appProperties||{},now=Date.now(),on=[];
+    Object.entries(ap).forEach(([k,v])=>{if(!k.startsWith('u_'))return;const email=k.slice(2),{role,ss}=pDec(v);
+      ss.forEach(([s,d])=>{const x=PRES.hist.find(y=>y.e===email&&y.s===s);if(x){x.d=Math.max(x.d,d);x.r=role}else PRES.hist.push({e:email,s,d,r:role})});
+      const c=ss[0];if(c&&now-(c[0]+c[1])<3*60000)on.push({email,role,since:c[0]})});
+    PRES.hist.sort((a,b)=>b.s-a.s);PRES.hist=PRES.hist.slice(0,300);try{localStorage.setItem('bdt-pres-hist',JSON.stringify(PRES.hist))}catch(e){}
+    const ch=JSON.stringify(on.map(o=>o.email))!==JSON.stringify(PRES.online.map(o=>o.email));PRES.online=on;PRES.last=now;renderGBadge();if(tab==='sync'&&ch)schedule();else if(tab==='sync'){const c=$('#prescard');if(c&&!c.contains(document.activeElement))c.outerHTML=viewPresence()}}catch(e){}}
+const fmtDur=d=>d<60000?'moins d’1 min':d<3600000?Math.round(d/60000)+' min':Math.floor(d/3600000)+' h '+String(Math.round(d%3600000/60000)).padStart(2,'0');
+function viewPresence(){
+  if(G.member||!G.email||!G.dataId)return '';
+  const on=PRES.online,h=PRES.hist.slice(0,50);
+  return `<div class="card" id="prescard"><h2>Qui consulte ma base</h2>
+    <p style="margin:0 0 10px">${on.length?'<b>En ligne maintenant :</b> '+on.map(o=>`<span class="pres-on">${esc(o.email)} (${ROLE_FR[o.role]})</span>`).join(' '):'Personne en ce moment.'}</p>
+    ${h.length?`<div class="tablewrap"><table><thead><tr><th>Personne</th><th>Rôle</th><th>Arrivée</th><th>Durée</th></tr></thead><tbody>${h.map(x=>`<tr><td>${esc(x.e)}</td><td>${ROLE_FR[x.r]||''}</td><td>${new Date(x.s).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</td><td>${fmtDur(x.d)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="hint">Aucune visite enregistrée pour l’instant.</p>'}
+    <p class="hint" style="margin:10px 0 0">Mis à jour chaque minute tant que l’application est ouverte et connectée (décalage d’une à deux minutes). Les visites faites pendant que ton application était fermée apparaissent à ta prochaine ouverture.</p></div>`}
+setInterval(()=>{if(window.LOCALDB){pBeat();pPoll();renderGBadge()}},60000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){pBeat();pPoll()}});
 
 /* ---------- export, suppression ---------- */
 async function exportCsv(name,heads,rows){
@@ -1311,6 +1420,7 @@ function render(){
   rebuildRef();
   const full=S.full.length?`<div class="banner">Limite de 1 000 lignes atteinte pour : ${esc(S.full.join(', '))}. Les lignes au-delà ne sont pas lues. Exportez en CSV et archivez les anciennes.</div>`:'';
   renderProjBar();
+  if(window.LOCAL)renderGBadge();
   main.innerHTML=full+(window.LOCAL?gBanner():'')+(FORM.pe?viewProjPanel():'')+(FORM.pd?viewDelPanel():'')+VIEWS[tab]();
   if(FORM.pe)wireProjPanel(main);
   if(FORM.pd)wireDelPanel(main);
