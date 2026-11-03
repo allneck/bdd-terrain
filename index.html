@@ -96,7 +96,7 @@ input,select{width:100%;font:inherit;color:var(--ink);background:var(--surface);
 .item .m{font-size:12px;color:var(--muted)}
 .item .r{text-align:right;font-variant-numeric:tabular-nums;font-size:13px}
 .pill{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;border:1px solid currentColor}
-.pill.Encours{color:var(--muted)} .pill.FINIE{color:var(--good)} .pill.DEPASSE{color:var(--bad)}
+.pill.Encours{color:var(--muted)} .pill.FINIE{color:var(--good)} .pill.DEPASSE{color:var(--bad)} .pill.Manuel{color:var(--accent)}
 .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -124,7 +124,12 @@ svg.ch line.g{stroke:var(--line)}
 .banner.ro{border-color:var(--line);color:var(--muted)}
 .banner.err{border-color:var(--bad);background:var(--bad-soft);font-weight:600}
 .stockhint{padding:9px 12px;border-radius:8px;background:var(--accent-soft);font-size:13px}
-.stockhint.bad{background:var(--bad-soft);color:var(--bad);font-weight:600}
+.stockhint.bad{background:var(--bad-soft);color:var(--bad)}
+.stk3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.stk3>div{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:0;color:var(--ink)}
+.stk3 span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;overflow-wrap:anywhere}
+.stk3 b{font-size:17px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stk3 .ok b{color:var(--good)} .stk3 .warn b{color:var(--qual)} .stk3 .neg b{color:var(--bad)}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:8px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;max-width:92vw}
 #toast.on{opacity:1}
 .sub{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
@@ -207,10 +212,10 @@ const norm=s=>String(s??'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''
 const dkey=s=>norm(s).replace(/\s+/g,' ').trim();
 const hash=s=>{let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return (h>>>0).toString(36)+s.length.toString(36)};
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-const COLLS=['mo','sorties','livraisons','postes','designations','fournisseurs','lieux','projets','ouvrages','fournMO'];
+const COLLS=['mo','sorties','livraisons','postes','designations','fournisseurs','lieux','projets','ouvrages','fournMO','quals','statuts'];
 const S={can:true,db:null,dl:null,err:'',loaded:{},full:[]};
 COLLS.forEach(c=>S[c]=[]);S.raw={};S.wps=[];S.unites=[];S.dbRaw=null;
-const SCOPED=['mo','sorties','livraisons','postes','fournisseurs','lieux','projets','ouvrages','fournMO'],PREF=['postes','fournisseurs','lieux','projets','ouvrages','fournMO'];
+const SCOPED=['mo','sorties','livraisons','postes','fournisseurs','lieux','projets','ouvrages','fournMO','quals','statuts'],PREF=['postes','fournisseurs','lieux','projets','ouvrages','fournMO','quals','statuts'];
 let WP='p0';try{WP=localStorage.getItem('wp')||'p0'}catch(e){}
 const scope=n=>(S.raw[n]||[]).filter(d=>(d.wp||'p0')===WP);
 const FQ={mo:{f:new Set(),q:new Set(),s:new Set(),m:new Set(),l:new Set()},mat:{o:new Set(),l:new Set(),m:new Set(),p:new Set()}};
@@ -237,7 +242,7 @@ function colF(f){const i=moFourn().indexOf(f);return PAL[(i<0?0:i)%PAL.length]}
 /* ---------- données de référence (intégrées + ajoutées) ---------- */
 function rebuildRef(){
   const m=new Map();if(WP==='p0')BASE_P.forEach(p=>m.set(p.id,{...p}));
-  S.postes.forEach(d=>m.set(d.id,{id:d.id,f:d.f,poste:d.poste,lin:d.lin||'',u:d.u||'',max:+d.max||0,prix:+d.prix||0,q:d.q||'Non Qualifié'}));
+  S.postes.forEach(d=>m.set(d.id,{id:d.id,f:d.f,poste:d.poste,lin:d.lin||'',u:d.u||'',max:+d.max||0,prix:+d.prix||0,q:d.q||'Non Qualifié',st:d.st||''}));
   const hidF=new Set(S.fournMO.filter(x=>x.hidden).map(x=>dkey(x.nom)));
   P=[...m.values()].filter(p=>!hidF.has(dkey(p.f)));PID={};P.forEach(p=>PID[p.id]=p);
   const dm=new Map();BASE_D.forEach(x=>dm.set(dkey(x.d),{d:x.d,c:x.c||'',u:x.u||''}));
@@ -286,10 +291,23 @@ function availFor(st,des,projet){const a=st.art.get(dkey(des));return a&&a.proj[
 /* ---------- calculs main d'œuvre ---------- */
 function usedMap(){const m={};for(const e of S.mo)m[e.p]=(m[e.p]||0)+(+e.hj||0);return m}
 function statut(max,used){return used>max?'DEPASSE':used===max&&max>0?'FINIE':'Encours'}
+/* qualifications et statuts modifiables (onglet Listes) */
+const QDEF=['Qualifié','Non Qualifié'];
+function qualList(){const hid=new Set(S.quals.filter(x=>x.hidden).map(x=>dkey(x.nom))),r=new Map();QDEF.forEach((q,i)=>r.set(dkey(q),{n:q,k:i}));
+  S.quals.filter(x=>!x.hidden).sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach((x,i)=>{if(!r.has(dkey(x.nom)))r.set(dkey(x.nom),{n:x.nom,k:x.rk!=null?+x.rk:100+i})});
+  return [...r.values()].filter(o=>!hid.has(dkey(o.n))).sort((a,b)=>a.k-b.k).map(o=>o.n)}
+function qualsUsed(){const ql=qualList();return uniq(ql.concat(P.map(p=>p.q))).filter(q=>ql.includes(q)||P.some(p=>p.q===q))}
+const STD={Encours:'En cours',FINIE:'FINIE',DEPASSE:'DÉPASSÉ'};
+function stLabel(k){const d=S.statuts.find(x=>x.auto===k);return (d&&d.nom)||STD[k]||k}
+function manualStatuts(){const hid=new Set(S.statuts.filter(x=>!x.auto&&x.hidden).map(x=>dkey(x.nom)));return uniq(S.statuts.filter(x=>!x.auto&&!x.hidden).map(x=>x.nom)).filter(n=>!hid.has(dkey(n)))}
+function pKeySt(p,u){if(p.st){const m=manualStatuts().find(n=>dkey(n)===dkey(p.st));if(m)return 'M:'+m}return statut(p.max,u)}
+const stName=k=>k.startsWith('M:')?k.slice(2):stLabel(k);
+const stCls=k=>k.startsWith('M:')?'Manuel':k;
+const pStatut=(p,u)=>stName(pKeySt(p,u));
 function moRows(){
   const um=usedMap(),out=[];
   for(const e of S.mo){const p=PID[e.p];if(!p)continue;
-    out.push({f:p.f,q:p.q,poste:p.poste,lin:p.lin||'(sans code)',s:statut(p.max,um[p.id]||0),date:e.date,m:(e.date||'').slice(0,7),hj:+e.hj||0,cout:(+e.hj||0)*p.prix,pid:p.id})}
+    out.push({f:p.f,q:p.q,poste:p.poste,lin:p.lin||'(sans code)',s:pStatut(p,um[p.id]||0),date:e.date,m:(e.date||'').slice(0,7),hj:+e.hj||0,cout:(+e.hj||0)*p.prix,pid:p.id})}
   return out}
 function moFiltered(){const F=FQ.mo;return moRows().filter(r=>pass(F.f,r.f)&&pass(F.q,r.q)&&pass(F.s,r.s)&&pass(F.m,r.m)&&pass(F.l,r.lin))}
 
@@ -319,8 +337,8 @@ function donut(items,fm){
   const R=60,C=2*Math.PI*R;let off=0,arcs='';
   items.forEach(i=>{const d=C*i.v/tot;arcs+=`<circle r="${R}" cx="80" cy="80" fill="none" stroke="${i.c}" stroke-width="26" stroke-dasharray="${d.toFixed(2)} ${(C-d).toFixed(2)}" stroke-dashoffset="${(-off).toFixed(2)}" transform="rotate(-90 80 80)"><title>${esc(i.l)} : ${fm(i.v)}</title></circle>`;off+=d});
   return `<div class="donutwrap"><svg viewBox="0 0 160 160" width="160" height="160" role="img">${arcs}<text x="80" y="84" text-anchor="middle" style="font-size:15px;font-weight:700;fill:var(--ink)">${fm(tot)}</text></svg><div class="legend" style="flex-direction:column;gap:6px;margin:0">${items.map(i=>`<span><i style="background:${i.c}"></i>${esc(i.l)} · ${fm(i.v)} (${Math.round(100*i.v/tot)} %)</span>`).join('')}</div></div>`}
-const COL_Q={'Qualifié':'var(--qual)','Non Qualifié':'var(--nonq)'};
-const colq=q=>COL_Q[q]||'var(--accent)';
+const QPAL=['var(--qual)','var(--nonq)','var(--c3)','var(--c4)','var(--tgb)','var(--abri)'];
+const colq=q=>{const i=qualsUsed().indexOf(q);return i<0?'var(--accent)':QPAL[i%QPAL.length]};
 
 /* ---------- filtres (segments) ---------- */
 function chips(group,key,label,opts){
@@ -335,13 +353,13 @@ function monthLabel(m){const [y,mo]=m.split('-');return ['janv.','févr.','mars'
 function viewMoDash(){
   const all=moRows(),F=FQ.mo,rows=moFiltered();
   const opt=(k)=>uniq(all.map(r=>r[k])).sort();
-  const cout=sum(rows,r=>r.cout),hj=sum(rows,r=>r.hj),cq=sum(rows.filter(r=>r.q==='Qualifié'),r=>r.cout);
+  const Q1=qualList()[0]||'Qualifié';const cout=sum(rows,r=>r.cout),hj=sum(rows,r=>r.hj),cq=sum(rows.filter(r=>r.q===Q1),r=>r.cout);
   const um=usedMap();
-  const postes=P.filter(p=>pass(F.f,p.f)&&pass(F.q,p.q)&&pass(F.l,p.lin||'(sans code)')&&pass(F.s,statut(p.max,um[p.id]||0)));
-  const dep=postes.filter(p=>statut(p.max,um[p.id]||0)==='DEPASSE').length;
+  const postes=P.filter(p=>pass(F.f,p.f)&&pass(F.q,p.q)&&pass(F.l,p.lin||'(sans code)')&&pass(F.s,pStatut(p,um[p.id]||0)));
+  const dep=postes.filter(p=>pKeySt(p,um[p.id]||0)==='DEPASSE').length;
   const byF=groupBy(rows,r=>r.f),byQ=groupBy(rows,r=>r.q);
   const fournisseurs=moFourn();
-  const quals=uniq(P.map(p=>p.q)).sort().reverse();
+  const quals=qualsUsed().filter(q=>P.some(p=>p.q===q));
   const months=uniq(rows.map(r=>r.m)).sort();
   const dates=uniq(rows.map(r=>r.date)).sort();
   const top=[...groupBy(rows,r=>r.pid)].map(([id,a])=>({l:PID[id].poste,v:sum(a,r=>r.cout),c:colF(PID[id].f)})).sort((a,b)=>b.v-a.v).slice(0,10);
@@ -350,7 +368,7 @@ function viewMoDash(){
   <div class="card filters">
     ${chips('mo','f','Fournisseur',fournisseurs)}
     ${chips('mo','q','Qualification',quals)}
-    ${chips('mo','s','Statut du poste',['Encours','FINIE','DEPASSE'])}
+    ${chips('mo','s','Statut du poste',['Encours','FINIE','DEPASSE'].map(stLabel).concat(manualStatuts()))}
     ${chips('mo','m','Mois',uniq(all.map(r=>r.m)).sort())}
     <div class="fg"><span class="fl">Code LIN</span><select id="linSel" style="max-width:260px"><option value="">Tous les codes</option>${opt('lin').map(l=>`<option ${F.l.has(l)?'selected':''}>${esc(l)}</option>`).join('')}</select>
       <button class="link" data-reset="mo">Tout effacer</button></div>
@@ -359,7 +377,7 @@ function viewMoDash(){
     <div class="kpi"><div class="l">Coût utilisé (USD)</div><div class="v">${fmt(cout)}</div><div class="s">hommes-jours × prix unitaire</div></div>
     <div class="kpi"><div class="l">Hommes-jours</div><div class="v">${fmt0(hj)}</div><div class="s">${rows.length} saisie(s)</div></div>
     <div class="kpi"><div class="l">Coût moyen / H-J</div><div class="v">${hj?fmt(cout/hj):'0'}</div><div class="s">USD</div></div>
-    <div class="kpi"><div class="l">Part du coût qualifié</div><div class="v">${cout?Math.round(100*cq/cout):0} %</div><div class="s">${fmt(cq)} USD</div></div>
+    <div class="kpi"><div class="l">Part du coût « ${esc(Q1)} »</div><div class="v">${cout?Math.round(100*cq/cout):0} %</div><div class="s">${fmt(cq)} USD</div></div>
     <div class="kpi"><div class="l">Postes dépassés</div><div class="v" style="color:${dep?'var(--bad)':'var(--good)'}">${dep}</div><div class="s">sur ${postes.length} postes</div></div>
   </div>
   <div class="grid g2">
@@ -469,7 +487,7 @@ function viewSaisieMo(){
       <div class="wide"><label for="mSearch">Rechercher un poste (quelques mots, Entrée = choisir le premier)</label><input id="mSearch" value="${esc(FORM.search)}" autocomplete="off" placeholder="ex. maçon KASINGA"></div>
     </div>
     <div class="list" id="mList" style="margin-top:10px" role="listbox" aria-label="Postes">
-      ${shown.map(p=>{const u=um[p.id]||0,s=statut(p.max,u);return `<div class="item" role="option" tabindex="0" data-id="${esc(p.id)}" aria-selected="${sel&&sel.id===p.id}"><div class="n">${esc(p.poste)}</div><div class="r">${fmt(u)} / ${fmt(p.max)} <span class="pill ${s}">${s}</span></div><div class="m">${esc(p.q)}${p.lin?' · '+esc(p.lin):''} · ${esc(p.u)} · ${fmt(p.prix)} USD</div><div></div></div>`}).join('')||'<div class="empty">Aucun poste ne correspond. Ajoutez-en dans « Listes » ou « Importer ».</div>'}
+      ${shown.map(p=>{const u=um[p.id]||0,sk=pKeySt(p,u);return `<div class="item" role="option" tabindex="0" data-id="${esc(p.id)}" aria-selected="${sel&&sel.id===p.id}"><div class="n">${esc(p.poste)}</div><div class="r">${fmt(u)} / ${fmt(p.max)} <span class="pill ${stCls(sk)}">${esc(stName(sk))}</span></div><div class="m">${esc(p.q)}${p.lin?' · '+esc(p.lin):''} · ${esc(p.u)} · ${fmt(p.prix)} USD</div><div></div></div>`}).join('')||'<div class="empty">Aucun poste ne correspond. Ajoutez-en dans « Listes » ou « Importer ».</div>'}
     </div>
     <div class="form" style="margin-top:12px">
       <div class="wide hint" id="mInfo">${info||'Choisissez un poste dans la liste.'}</div>
@@ -518,18 +536,25 @@ function wireSaisieMo(root){
 /* ---------- formulaire sorties (par projet, avec contrôle du stock) ---------- */
 function soHint(){
   const f=FORM.so,st=computeStock();
-  if(!f.des||!f.projet)return {t:'Choisissez l’article et le projet pour voir le stock disponible.',bad:false};
-  const a=st.art.get(dkey(f.des));const av=availFor(st,f.des,f.projet);
-  if(av==null)return {t:'Aucune livraison enregistrée pour cet article sur le projet « '+f.projet+' ». Enregistrez d’abord la livraison.',bad:true};
+  if(!f.des)return {h:'<span>Choisis l’article et le projet : le stock disponible et ce qui restera s’affichent ici.</span>',bad:false};
+  const a=st.art.get(dkey(f.des)),q=parseInt(f.qte,10)||0;
+  if(!a)return {h:'<b>Aucune livraison enregistrée pour cet article.</b> Enregistre d’abord la livraison pour pouvoir le sortir.',bad:true};
   const u=a.unite||f.unite||'';
+  const tot=Object.values(a.proj).reduce((x,y)=>x+y,0);
+  const other=Object.entries(a.proj).filter(([p,v])=>p!==f.projet&&v>0).map(([p,v])=>esc(p)+' : '+fmt(v)+' '+esc(u)).join(' · ');
+  if(!f.projet)return {h:`<b>Stock total, tous projets : ${fmt(tot)} ${esc(u)}.</b> Choisis le projet pour voir son stock.${other?'<div class="hint" style="margin-top:4px">Par projet : '+other+'</div>':''}`,bad:false};
+  const av=availFor(st,f.des,f.projet);
+  if(av==null)return {h:`<b>Aucune livraison de cet article sur le projet « ${esc(f.projet)} ».</b>${other?' Stock sur les autres projets : '+other+'.':''}`,bad:true};
+  const rest=av-q,bad=q>av;
   const lots=a.lots.filter(l=>l.projet===f.projet&&l.rest>0);
-  const other=Object.entries(a.proj).filter(([p,v])=>p!==f.projet&&v>0).map(([p,v])=>p+' : '+fmt(v)).join(' · ');
-  const q=parseInt(f.qte,10)||0;
-  let t=`Stock pour « ${f.projet} » : ${fmt(av)} ${u}.`;
-  if(lots.length){const l=lots[0];t+=` Sera pris d’abord sur : ${l.nom||'fournisseur ?'}${l.bc?', bon de commande '+l.bc:''}.`}
-  if(other)t+=` Autres projets : ${other}.`;
-  return {t,bad:q>av};}
-function updHint(){const h=$('#sHint');if(!h)return;const x=soHint();h.textContent=x.t;h.className='stockhint'+(x.bad?' bad':'')}
+  let more='';if(lots.length){const l=lots[0];more+=`Sera pris d’abord sur : ${esc(l.nom||'fournisseur ?')}${l.bc?', bon de commande '+esc(l.bc):''}. `}
+  if(other)more+='Autres projets : '+other+'.';
+  return {bad,h:`<div class="stk3"><div><span>En stock (${esc(f.projet)})</span><b>${fmt(av)} ${esc(u)}</b></div><div><span>Cette sortie</span><b>${q?'− '+fmt(q):'–'}</b></div><div class="${bad?'neg':rest===0&&q?'warn':'ok'}"><span>Restera</span><b>${bad?'insuffisant':fmt(rest)+' '+esc(u)}</b></div></div>
+    ${bad?`<div style="margin-top:6px"><b>Il ne reste que ${fmt(av)} ${esc(u)} : la sortie sera refusée.</b></div>`:''}${more?`<div class="hint" style="margin-top:6px">${more}</div>`:''}`}}
+function updHint(){const h=$('#sHint');if(!h)return;const x=soHint();h.innerHTML=x.h;h.className='stockhint'+(x.bad?' bad':'')}
+function desOptsSo(){const st=computeStock(),pj=FORM.so.projet,known=new Set(DES.map(p=>dkey(p.d)));
+  return DES.concat([...st.art.values()].filter(a=>!known.has(dkey(a.des))).map(a=>({d:a.des,u:a.unite}))).map(p=>{const a=st.art.get(dkey(p.d));let v=null;if(a)v=pj?(a.proj[pj]!=null?a.proj[pj]:null):Object.values(a.proj).reduce((x,y)=>x+y,0);
+    const u=(a&&a.unite)||p.u||'';return `<option value="${esc(p.d)}" label="${v==null?'Pas de stock'+(pj?' sur ce projet':''):'Stock : '+fmt(v)+' '+esc(u)}">`}).join('')}
 function viewSaisieSorties(){
   const f=FORM.so,q=norm(FORM.fs),h=soHint();
   const rows=S.sorties.filter(r=>!q||norm([r.des,r.lieu,r.ouvrage,r.store,r.waybill,r.projet].join(' ')).includes(q)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.ts||0)-(a.ts||0));
@@ -545,11 +570,11 @@ function viewSaisieSorties(){
       <div class="wide"><label for="sDes">Désignation</label><input id="sDes" list="dlDes" value="${esc(f.des)}" autocomplete="off" placeholder="Tapez pour chercher dans la liste des désignations"></div>
       <div><label for="sUni">Unité (automatique)</label><input id="sUni" list="dlUni" value="${esc(f.unite)}"></div>
       <div><label for="sQte">Quantité</label><input id="sQte" inputmode="numeric" value="${esc(f.qte)}" autocomplete="off"></div>
+      <div class="wide"><div id="sHint" class="stockhint${h.bad?' bad':''}" aria-live="polite">${h.h}</div></div>
       ${selAdd('sOuv','Ouvrage','ouvrages',f.ouvrage)}
       ${selAdd('sLieu','Lieu','lieux',f.lieu)}
-      <div class="wide"><div id="sHint" class="stockhint${h.bad?' bad':''}">${esc(h.t)}</div></div>
     </div>
-    <datalist id="dlDes">${DES.map(p=>`<option value="${esc(p.d)}">`).join('')}</datalist>
+    <datalist id="dlDes">${desOptsSo()}</datalist>
     <datalist id="dlUni">${UNITS.map(u=>`<option value="${esc(u)}">`).join('')}</datalist>
     ${addRow()}
     <div class="row" style="margin-top:14px"><button class="btn pri" id="sSave" ${S.can?'':'disabled'}>Enregistrer</button><button class="btn" id="sCancel">Annuler</button><span class="hint">Après l’enregistrement, la date, les références, le projet, l’ouvrage et le lieu restent pour saisir l’article suivant.</span></div>
@@ -561,7 +586,7 @@ function wireSaisieSorties(root){
   const f=FORM.so;
   const clr=()=>{if(FORM.soErr){FORM.soErr='';const b=document.querySelector('.banner.err');if(b)b.remove()}};
   const bind=(id,k,dig)=>{const el=$(id);el.oninput=()=>{f[k]=dig?digits(el):el.value;clr();if(k==='des'){const u=paramUnit(f.des);if(u){f.unite=u;$('#sUni').value=u}}if(k==='des'||k==='qte')updHint()}};
-  const sel=(id,k)=>{const el=$(id);el.onchange=()=>{f[k]=el.value;clr();updHint()}};
+  const sel=(id,k)=>{const el=$(id);el.onchange=()=>{f[k]=el.value;clr();updHint();if(k==='projet'){const d=$('#dlDes');if(d)d.innerHTML=desOptsSo()}}};
   $('#sDate').onchange=()=>{f.date=$('#sDate').value};
   bind('#sStore','store',true);bind('#sWay','waybill',true);bind('#sQte','qte',true);bind('#sDes','des');bind('#sUni','unite');
   sel('#sProj','projet');sel('#sOuv','ouvrage');sel('#sLieu','lieu');
@@ -658,7 +683,28 @@ function viewListes(){
   const fmCard=`<div class="card"><h2>Fournisseurs de main d’œuvre</h2><div>${moFourn().map(n=>`<span class="tag">${esc(n)}${S.can?`<button data-fmrem="${esc(n)}" aria-label="Retirer ${esc(n)}" title="Retirer ce fournisseur">×</button>`:''}</span>`).join('')||'<span class="hint">Aucun fournisseur.</span>'}</div>
     <div class="row" style="margin-top:8px"><input id="fmNom" placeholder="Nouveau fournisseur (ex. KATOYI)" style="max-width:260px" ${S.can?'':'disabled'}><button class="btn pri sm" id="fmAdd" ${S.can?'':'disabled'}>Ajouter le fournisseur</button></div>
     <div class="hint" style="margin-top:6px">Il apparaît ensuite dans la saisie de la main d’œuvre, le tableau de bord (avec sa couleur) et l’export Excel. Ajoutez ses postes plus bas ou avec « Importer ».</div></div>`;
-  return `${uaRow}${fmPanel}<div class="grid g2">${fmCard}
+  const qe=FORM.qe;
+  const qPanel=qe?`<div class="banner" style="flex-wrap:wrap;gap:8px"><label for="qeNom" style="margin:0">Renommer la qualification « ${esc(qe)} » (${P.filter(p=>p.q===qe).length} poste(s) mis à jour) :</label><input id="qeNom" value="${esc(qe)}" style="max-width:220px"><button class="btn pri sm" id="qeOk">Enregistrer</button><button class="btn sm" id="qeNo">Annuler</button></div>`:'';
+  const qCard=`<div class="card"><h2>Qualifications</h2><div>${qualList().map(n=>`<span class="tag">${esc(n)}${S.can?`<button data-qed="${esc(n)}" aria-label="Renommer ${esc(n)}" title="Renommer">✎</button><button data-qrem="${esc(n)}" aria-label="Retirer ${esc(n)}" title="Retirer de la liste">×</button>`:''}</span>`).join('')||'<span class="hint">Liste vide.</span>'}</div>
+    <div class="row" style="margin-top:8px"><input id="qNom" placeholder="Nouvelle qualification (ex. Semi-qualifié)" style="max-width:260px" ${S.can?'':'disabled'}><button class="btn pri sm" id="qAdd" ${S.can?'':'disabled'}>Ajouter</button></div>
+    <div class="hint" style="margin-top:6px">✎ renomme la qualification partout, y compris dans les postes qui l’utilisent. × la retire de la liste des choix : les postes qui l’ont déjà la gardent. La première de la liste sert pour l’indicateur « Part du coût ».</div></div>`;
+  const ms=manualStatuts(),sa=FORM.sa||(FORM.sa={p:'',s:''});
+  const stCard=`<div class="card"><h2>Statuts des postes</h2>
+    <div class="hint" style="margin-bottom:6px">Calculés tout seuls (jours consommés comparés aux jours prévus). Tu peux changer leur nom :</div>
+    <div style="display:grid;gap:6px">${['Encours','FINIE','DEPASSE'].map(k=>`<div class="row nw"><span class="pill ${k}" style="min-width:86px">${({Encours:'consommé < prévu',FINIE:'consommé = prévu',DEPASSE:'consommé > prévu'})[k]}</span><input data-stren="${k}" value="${esc(stLabel(k))}" style="max-width:200px" ${S.can?'':'disabled'}></div>`).join('')}</div>
+    <div class="row" style="margin-top:8px"><button class="btn sm" id="stRen" ${S.can?'':'disabled'}>Enregistrer les noms</button></div>
+    <div class="hint" style="margin:12px 0 6px">Statuts à attribuer à la main (ex. Suspendu, Annulé) :</div>
+    <div>${ms.map(n=>`<span class="tag">${esc(n)}${S.can?`<button data-strem="${esc(n)}" aria-label="Retirer ${esc(n)}" title="Retirer">×</button>`:''}</span>`).join('')||'<span class="hint">Aucun pour l’instant.</span>'}</div>
+    <div class="row" style="margin-top:8px"><input id="stNom" placeholder="Nouveau statut (ex. Suspendu)" style="max-width:260px" ${S.can?'':'disabled'}><button class="btn pri sm" id="stAdd" ${S.can?'':'disabled'}>Ajouter</button></div></div>`;
+  const withSt=P.filter(p=>p.st&&ms.some(n=>dkey(n)===dkey(p.st)));
+  const saCard=`<div class="card"><h2>Attribuer un statut à un poste</h2>
+    ${ms.length?`<div class="form"><div class="wide"><label for="saP">Poste</label><select id="saP" ${S.can?'':'disabled'}><option value="">Choisir…</option>${moFourn().map(fo=>`<optgroup label="${esc(fo)}">${P.filter(p=>p.f===fo).map(p=>`<option value="${esc(p.id)}" ${sa.p===p.id?'selected':''}>${esc((p.lin?p.lin+' · ':'')+p.poste)}</option>`).join('')}</optgroup>`).join('')}</select></div>
+      <div><label for="saS">Statut</label><select id="saS" ${S.can?'':'disabled'}><option value="">Automatique (calculé)</option>${ms.map(n=>`<option ${dkey(sa.s)===dkey(n)?'selected':''}>${esc(n)}</option>`).join('')}</select></div>
+      <div><button class="btn pri" id="saOk" ${S.can?'':'disabled'}>Enregistrer</button></div></div>
+      <div style="margin-top:10px">${withSt.length?withSt.map(p=>`<span class="tag">${esc(p.f)} · ${esc(p.poste)} : <b>${esc(p.st)}</b>${S.can?`<button data-saclr="${esc(p.id)}" aria-label="Revenir au statut automatique" title="Revenir au statut automatique">×</button>`:''}</span>`).join(''):'<span class="hint">Aucun poste n’a de statut attribué à la main.</span>'}</div>`
+      :'<p class="hint" style="margin:0">Ajoute d’abord un statut à attribuer (ex. Suspendu) dans le cadre « Statuts des postes ».</p>'}
+    <div class="hint" style="margin-top:6px">Un statut attribué à la main remplace le statut calculé dans la saisie, le tableau de bord et l’export Excel. × revient au calcul automatique.</div></div>`;
+  return `${uaRow}${fmPanel}${qPanel}<div class="grid g2">${fmCard}${qCard}${stCard}${saCard}
   ${usec('mo','Unités de main d’œuvre','Homme-jour, Personne, Jour… Elles servent pour les postes de main d’œuvre.')}
   ${usec('mat','Unités de matériel','Sac, Barre, Pièce… Elles servent pour les désignations, sorties et livraisons.')}
   </div>
@@ -673,7 +719,7 @@ function viewListes(){
       <div><label for="pF">Fournisseur</label><input id="pF" list="dlFm" value="${esc(LP.f)}" autocomplete="off"><datalist id="dlFm">${moFourn().map(x=>`<option value="${esc(x)}">`).join('')}</datalist></div>
       <div><label for="pLin">Code LIN</label><input id="pLin" value="${esc(LP.lin)}"></div>
       <div class="wide"><label for="pPoste">Poste</label><input id="pPoste" value="${esc(LP.poste)}" autocomplete="off"></div>
-      <div><label for="pQ">Qualification</label><select id="pQ"><option ${LP.q==='Qualifié'?'selected':''}>Qualifié</option><option ${LP.q==='Non Qualifié'?'selected':''}>Non Qualifié</option></select></div>
+      <div><label for="pQ">Qualification</label><select id="pQ">${(qualList().includes(LP.q)?qualList():qualList().concat([LP.q])).map(q=>`<option ${q===LP.q?'selected':''}>${esc(q)}</option>`).join('')}</select></div>
       <div><label for="pU">Unité (main d’œuvre)</label><div class="row nw"><select id="pU"><option value="">Choisir…</option>${(LP.u&&!UNITS_MO.includes(LP.u)?UNITS_MO.concat([LP.u]):UNITS_MO).map(u=>`<option ${u===LP.u?'selected':''}>${esc(u)}</option>`).join('')}</select><button class="btn plus" data-uadd="mo:pU" title="Ajouter une unité" aria-label="Ajouter une unité de main d’œuvre">+</button></div></div>
       <div><label for="pMax">Jours prévus</label><input id="pMax" inputmode="numeric" value="${esc(LP.max)}"></div>
       <div><label for="pPrix">Prix unitaire (USD)</label><input id="pPrix" inputmode="decimal" value="${esc(LP.prix)}"></div>
@@ -687,6 +733,29 @@ function viewListes(){
       <div><button class="btn pri" id="dAdd" ${S.can?'':'disabled'}>Ajouter la désignation</button></div>
     </div><div class="hint" style="margin-top:8px">${DES.length} désignations, communes aux sorties et aux livraisons.</div></div>`}
 function wireListes(root){
+  const qa=$('#qAdd');if(qa){const go=async()=>{const n=$('#qNom').value.trim();if(!n)return;if(qualList().some(x=>dkey(x)===dkey(n))){toast('« '+n+' » existe déjà');return}
+      try{await S.db.collection('quals').doc(slug(n)).set({nom:n,ts:Date.now()});toast('Qualification « '+n+' » ajoutée')}catch(e){toast('Ajout impossible : '+(e.message||e.code))}};qa.onclick=go;$('#qNom').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}}}
+  root.querySelectorAll('[data-qrem]').forEach(b=>b.onclick=async()=>{const n=b.dataset.qrem;if(qualList().length<=1){toast('Garde au moins une qualification.');return}
+    try{await S.db.collection('quals').doc(slug(n)).set({nom:n,hidden:true,ts:Date.now()});toast('« '+n+' » retirée de la liste')}catch(e){toast('Impossible')}});
+  root.querySelectorAll('[data-qed]').forEach(b=>b.onclick=()=>{FORM.qe=b.dataset.qed;render();const i=$('#qeNom');if(i){i.focus();i.select()}});
+  const qn=$('#qeNo');if(qn)qn.onclick=()=>{FORM.qe=null;render()};
+  const qo=$('#qeOk');if(qo){const go=async()=>{const old=FORM.qe,nw=$('#qeNom').value.trim();if(!nw||nw===old){FORM.qe=null;render();return}
+      if(qualList().some(x=>dkey(x)===dkey(nw)&&x!==old)){toast('« '+nw+' » existe déjà');return}
+      const items=[{c:'quals',id:slug(old),d:{nom:old,hidden:true,ts:Date.now()}},{c:'quals',id:slug(nw),d:{nom:nw,rk:qualList().indexOf(old),ts:Date.now()}}]
+        .concat(P.filter(p=>p.q===old).map(p=>({c:'postes',id:p.id,d:{f:p.f,lin:p.lin||'',poste:p.poste,q:nw,u:p.u||'',max:p.max,prix:p.prix,st:p.st||'',ts:Date.now()}})));
+      if(dkey(old)===dkey(nw))items.splice(0,1);
+      if(FORM.lp&&FORM.lp.q===old)FORM.lp.q=nw;
+      const fail=await writeMany(items,()=>{});FORM.qe=null;toast(fail?fail+' élément(s) non mis à jour.':'Qualification renommée en « '+nw+' »');render()};qo.onclick=go;$('#qeNom').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}}}
+  const sr=$('#stRen');if(sr)sr.onclick=async()=>{const items=[];root.querySelectorAll('[data-stren]').forEach(i=>{const k=i.dataset.stren,v=i.value.trim()||STD[k];if(v!==stLabel(k))items.push({c:'statuts',id:'auto-'+k,d:{nom:v,auto:k,ts:Date.now()}})});
+    if(!items.length){toast('Aucun changement');return}Object.values(FQ.mo).forEach(x=>x.clear());const fail=await writeMany(items,()=>{});toast(fail?'Enregistrement incomplet':'Noms des statuts enregistrés')};
+  const sta=$('#stAdd');if(sta){const go=async()=>{const n=$('#stNom').value.trim();if(!n)return;
+      if(manualStatuts().concat(['Encours','FINIE','DEPASSE'].map(stLabel)).some(x=>dkey(x)===dkey(n))){toast('« '+n+' » existe déjà');return}
+      try{await S.db.collection('statuts').doc('m-'+slug(n)).set({nom:n,ts:Date.now()});toast('Statut « '+n+' » ajouté')}catch(e){toast('Ajout impossible : '+(e.message||e.code))}};sta.onclick=go;$('#stNom').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}}}
+  root.querySelectorAll('[data-strem]').forEach(b=>b.onclick=async()=>{const n=b.dataset.strem;try{await S.db.collection('statuts').doc('m-'+slug(n)).set({nom:n,hidden:true,ts:Date.now()});toast('Statut « '+n+' » retiré : ses postes reviennent au calcul automatique')}catch(e){toast('Impossible')}});
+  const setSt=async(id,st)=>{const p=PID[id];if(!p)return;try{await S.db.collection('postes').doc(id).set({f:p.f,lin:p.lin||'',poste:p.poste,q:p.q,u:p.u||'',max:p.max,prix:p.prix,st,ts:Date.now()});toast(st?'Statut « '+st+' » attribué':'Statut automatique rétabli')}catch(e){toast('Impossible : '+(e.message||e.code))}};
+  const sap=$('#saP'),sas=$('#saS');if(sap){sap.onchange=()=>{FORM.sa.p=sap.value;const p=PID[sap.value];FORM.sa.s=p&&p.st||'';sas.value=FORM.sa.s};sas.onchange=()=>{FORM.sa.s=sas.value};
+    $('#saOk').onclick=async()=>{if(!FORM.sa.p){toast('Choisis un poste.');return}await setSt(FORM.sa.p,FORM.sa.s);FORM.sa={p:'',s:''}}}
+  root.querySelectorAll('[data-saclr]').forEach(b=>b.onclick=()=>setSt(b.dataset.saclr,''));
   root.querySelectorAll('[data-ladd]').forEach(b=>{const k=b.dataset.ladd,i=$('#ln_'+k);const go=async()=>{if(await addToList(k,i.value)){toast('Ajouté');i.value=''}};b.onclick=go;i.onkeydown=e=>{if(e.key==='Enter')go()}});
   root.querySelectorAll('[data-lrem]').forEach(b=>b.onclick=async()=>{const k=b.dataset.lrem,n=b.dataset.n;try{await S.db.collection(k).doc(slug(n)).set({nom:n,hidden:true,ts:Date.now()});toast('« '+n+' » retiré de la liste')}catch(e){toast('Suppression impossible')}});
   root.querySelectorAll('[data-lclr]').forEach(b=>b.onclick=async()=>{const k=b.dataset.lclr;if(FORM.armClr!==k){FORM.armClr=k;render();return}
@@ -711,7 +780,7 @@ function wireListes(root){
     if(!LP.f.trim()||!LP.poste.trim()){toast('Indiquez le fournisseur et le poste.');return}
     const key=LP.f.trim().toLowerCase()+'|'+dkey(LP.poste);const ex=P.find(p=>p.f.toLowerCase()+'|'+dkey(p.poste)===key);
     const id=ex?ex.id:'I'+hash(key);
-    try{await S.db.collection('postes').doc(id).set({f:LP.f.trim(),lin:LP.lin.trim(),poste:LP.poste.trim(),q:LP.q,u:LP.u.trim(),max:num(LP.max),prix:num(LP.prix),ts:Date.now()});
+    try{await S.db.collection('postes').doc(id).set({f:LP.f.trim(),lin:LP.lin.trim(),poste:LP.poste.trim(),q:LP.q,u:LP.u.trim(),max:num(LP.max),prix:num(LP.prix),st:ex&&ex.st||'',ts:Date.now()});
       await showFournMO(LP.f);
       if(LP.u.trim()&&!UNITS_MO.some(x=>dkey(x)===dkey(LP.u)))await addUnit('mo',LP.u);
       toast(ex?'Poste mis à jour':'Poste ajouté');Object.assign(LP,{lin:'',poste:'',max:'',prix:''});render()}catch(e){toast('Ajout impossible : '+(e.message||e.code))}};
@@ -772,7 +841,7 @@ function pDate(v){
   if(m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))return m[1]+'-'+pad(+m[2])+'-'+pad(+m[3]);
   if(m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})/)){const y=m[3].length===2?'20'+m[3]:m[3];return y+'-'+pad(+m[2])+'-'+pad(+m[1])}
   return ''}
-function normQual(v){const s=norm(v);if(!s.trim())return 'Non Qualifié';if(/non|sans/.test(s))return 'Non Qualifié';if(/qualif/.test(s))return 'Qualifié';return String(v).trim()}
+function normQual(v){const s=norm(v);if(!s.trim())return 'Non Qualifié';const ex=qualList().find(x=>dkey(x)===dkey(v));if(ex)return ex;if(/non|sans/.test(s))return 'Non Qualifié';if(/qualif/.test(s))return 'Qualifié';return String(v).trim()}
 function buildRecs(){
   const I=FORM.imp,def=IMP[I.type],rows=I.rows.slice(I.h+1),M=I.map,D=I.def||{},recs=[],bad=[],seen=new Set();
   const g=(r,k)=>M[k]!=null?r[M[k]]:'';
@@ -1000,9 +1069,9 @@ async function readProjectFile(fl){
 
 /* ---------- projet : enregistrer en Excel, vider, réimporter ---------- */
 const PJ={mo:['MainOeuvre',['p','f','date','hj','ts']],sorties:['Sorties',['date','store','waybill','des','unite','ouvrage','qte','lieu','projet','ts']],
-  livraisons:['Livraisons',['date','bc','nom','projet','lieu','des','qte','unite','prf','ts']],postes:['Postes',['f','lin','poste','q','u','max','prix','ts']],
-  designations:['Designations',['d','c','u']],fournisseurs:['Fournisseurs',['nom','hidden','ts']],lieux:['Lieux',['nom','hidden','ts']],projets:['Projets',['nom','hidden','ts']],ouvrages:['Ouvrages',['nom','hidden','ts']],fournMO:['FournisseursMO',['nom','hidden','ts']]};
-const PJ_NUM=new Set(['hj','qte','max','prix','ts']);
+  livraisons:['Livraisons',['date','bc','nom','projet','lieu','des','qte','unite','prf','ts']],postes:['Postes',['f','lin','poste','q','u','max','prix','st','ts']],
+  designations:['Designations',['d','c','u']],fournisseurs:['Fournisseurs',['nom','hidden','ts']],lieux:['Lieux',['nom','hidden','ts']],projets:['Projets',['nom','hidden','ts']],ouvrages:['Ouvrages',['nom','hidden','ts']],fournMO:['FournisseursMO',['nom','hidden','ts']],quals:['Qualifications',['nom','hidden','rk','ts']],statuts:['Statuts',['nom','auto','hidden','ts']]};
+const PJ_NUM=new Set(['hj','qte','max','prix','ts','rk']);
 function buildWorkbook(){
   const wb=XLSX.utils.book_new(),st=computeStock();
   const add=(name,rows,w)=>{const ws=XLSX.utils.aoa_to_sheet(rows);if(w)ws['!cols']=w.map(x=>({wch:x}));XLSX.utils.book_append_sheet(wb,ws,name)};
@@ -1012,8 +1081,8 @@ function buildWorkbook(){
   moFourn().forEach(fo=>{
     const ps=P.filter(p=>p.f===fo),n=ps.length+1,rows=[['Code','Code LIN','Poste','Qualification','Unité','Prévu','Consommé','Reste','Prix unitaire (USD)','Coût prévu (USD)','Coût consommé (USD)','Coût restant (USD)','Statut']];
     let sp=0,sc=0,cp=0,cc=0;
-    ps.forEach((p,i)=>{const r=i+2,u=um[p.id]||0,st=statut(p.max,u);sp+=p.max;sc+=u;cp+=p.max*p.prix;cc+=u*p.prix;
-      rows.push([p.id,p.lin||'',p.poste,p.q,p.u||'',p.max,u,FN(`F${r}-G${r}`,p.max-u),p.prix,FN(`F${r}*I${r}`,p.max*p.prix),FN(`G${r}*I${r}`,u*p.prix),FN(`H${r}*I${r}`,(p.max-u)*p.prix),T(st==='DEPASSE'?'DEPASSE':st==='FINIE'?'FINIE':'En cours')])});
+    ps.forEach((p,i)=>{const r=i+2,u=um[p.id]||0,st=pStatut(p,u);sp+=p.max;sc+=u;cp+=p.max*p.prix;cc+=u*p.prix;
+      rows.push([p.id,p.lin||'',p.poste,p.q,p.u||'',p.max,u,FN(`F${r}-G${r}`,p.max-u),p.prix,FN(`F${r}*I${r}`,p.max*p.prix),FN(`G${r}*I${r}`,u*p.prix),FN(`H${r}*I${r}`,(p.max-u)*p.prix),T(st)])});
     rows.push(['TOTAL','','','','',FN(`SUM(F2:F${n})`,sp),FN(`SUM(G2:G${n})`,sc),FN(`SUM(H2:H${n})`,sp-sc),'',FN(`SUM(J2:J${n})`,cp),FN(`SUM(K2:K${n})`,cc),FN(`SUM(L2:L${n})`,cp-cc),'']);
     add(fo.slice(0,31),rows,[8,12,52,14,9,9,11,9,12,14,16,14,10]);
     const ws=wb.Sheets[fo.slice(0,31)];ws['!freeze']={xSplit:0,ySplit:1};ws['!autofilter']={ref:`A1:M${n}`}});
@@ -1085,7 +1154,7 @@ function exportSheets(){
   moFourn().forEach(fo=>{const ps=P.filter(p=>p.f===fo);if(!ps.length)return;
     const rows=[['Code','Code LIN','Poste','Qualification','Unité','Prévu','Consommé','Reste','Prix unitaire (USD)','Coût prévu (USD)','Coût consommé (USD)','Coût restant (USD)','Statut']];
     let a=0,b=0,c=0,d=0;
-    ps.forEach(p=>{const u=um[p.id]||0;a+=p.max;b+=u;c+=p.max*p.prix;d+=u*p.prix;rows.push([p.id,p.lin||'',p.poste,p.q,p.u||'',p.max,u,p.max-u,p.prix,p.max*p.prix,u*p.prix,(p.max-u)*p.prix,statut(p.max,u)==='DEPASSE'?'DEPASSE':statut(p.max,u)==='FINIE'?'FINIE':'En cours'])});
+    ps.forEach(p=>{const u=um[p.id]||0;a+=p.max;b+=u;c+=p.max*p.prix;d+=u*p.prix;rows.push([p.id,p.lin||'',p.poste,p.q,p.u||'',p.max,u,p.max-u,p.prix,p.max*p.prix,u*p.prix,(p.max-u)*p.prix,pStatut(p,u)])});
     rows.push(['TOTAL','','','','',a,b,a-b,'',c,d,c-d,'']);out.push({name:fo.slice(0,60),rows})});
   const sr=[['Article','Unité','Projet','Quantité en stock']];[...st.art.values()].sort((x,y)=>x.des.localeCompare(y.des,'fr')).forEach(x=>Object.entries(x.proj).forEach(([p,v])=>sr.push([x.des,x.unite,p,v])));out.push({name:'Stock',rows:sr});
   out.push({name:'Lots',rows:[['Article','Projet','Fournisseur','Bon de commande','Date','Livré','Restant'],...st.lots.map(l=>[l.des,l.projet,l.nom,l.bc,l.date,l.qte,l.rest])]});
