@@ -1195,7 +1195,7 @@ function wireSyncOld(root){
 /* ---------- connexion Google : base commune dans Drive, synchronisation dans les deux sens, partage observateur / éditeur ---------- */
 const G=(()=>{let o={};try{o=JSON.parse(localStorage.getItem('bdt-google')||'{}')}catch(e){}
   return {cid:o.cid||'',email:o.email||'',tok:o.tok||'',exp:o.exp||0,scope:o.scope||'',folderId:o.folderId||'',dataId:o.dataId||'',sheetId:o.sheetId||'',last:o.last||'',later:false,dirty:!!o.dirty,
-    presId:o.presId||'',member:!!o.member,owner:o.owner||'',canEdit:o.canEdit!==false,joinId:o.joinId||'',busy:false,msg:'',ok:true,perms:null,share:{email:'',role:'reader',busy:false,msg:'',ok:true},leaveArm:false}})();
+    presId:o.presId||'',member:!!o.member,owner:o.owner||'',canEdit:o.canEdit!==false,joinId:o.joinId||'',busy:false,msg:'',ok:true,perms:null,share:{email:'',role:'reader',busy:false,msg:'',ok:true,inv:null},leaveArm:false}})();
 function saveG(){try{const {busy,msg,ok,perms,share,leaveArm,later,...k}=G;localStorage.setItem('bdt-google',JSON.stringify(k))}catch(e){}}
 const SC_OWN='https://www.googleapis.com/auth/drive.file openid email';
 const SC_MEM='https://www.googleapis.com/auth/drive openid email';
@@ -1237,7 +1237,7 @@ async function gFind(kind){const q=encodeURIComponent(`appProperties has { key='
 async function gCreate(meta){const j=await (await gfetch(DRV+'?fields=id',{method:'POST',headers:JH,body:JSON.stringify(meta)})).json();return j.id}
 async function gUpload(obj){const body=JSON.stringify(obj);
   if(G.dataId){try{await gfetch(`https://www.googleapis.com/upload/drive/v3/files/${G.dataId}?uploadType=media`,{method:'PATCH',headers:JH,body});return}catch(e){if(e.status!==404||G.member)throw e;G.dataId=''}}
-  const meta={name:'base-terrain-donnees.json',mimeType:'application/json',parents:[G.folderId],appProperties:{bdt:'data'},description:'Données de l’application Base de données terrain. Ne pas modifier à la main.'};
+  const meta={name:'Base de données terrain – données',mimeType:'application/json',parents:[G.folderId],appProperties:{bdt:'data'},description:'Données de l’application Base de données terrain. Ne pas modifier à la main.'};
   const b='bdt'+Date.now().toString(36);
   const mp=`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${b}--`;
   const j=await (await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{method:'POST',headers:{'Content-Type':'multipart/related; boundary='+b},body:mp})).json();
@@ -1341,10 +1341,11 @@ async function gShare(){
   sh.busy=true;sh.msg='';render();
   try{if(!G.dataId)await gSync(false);
     const link=inviteLink();
-    await gShareFile(G.dataId,email,sh.role,true,`${G.email} te donne accès à sa Base de données terrain (${ROLE_FR[sh.role]}). Ouvre ce lien sur ton téléphone, puis « Se connecter avec Google » : ${link}`);
+    try{await gfetch(`${DRV}/${G.dataId}?fields=id`,{method:'PATCH',headers:JH,body:JSON.stringify({name:'Base de données terrain – données'})})}catch(e){}
+    try{await gShareFile(G.dataId,email,sh.role,false)}catch(e){if(e.status===400||e.status===403)await gShareFile(G.dataId,email,sh.role,true,invText(email,sh.role));else throw e}
     if(G.sheetId)try{await gShareFile(G.sheetId,email,sh.role,false)}catch(e){}
     if(G.presId)try{await gShareFile(G.presId,email,'writer',false)}catch(e){}
-    sh.ok=true;sh.msg=email+' a reçu un e-mail avec le lien ('+ROLE_FR[sh.role]+'). N’oublie pas de l’ajouter comme utilisateur test dans la console Google.';sh.email=''}
+    sh.ok=true;sh.msg='Accès donné à '+email+' ('+ROLE_FR[sh.role]+'). Envoie-lui maintenant l’invitation ci-dessous. N’oublie pas de l’ajouter comme utilisateur test dans la console Google.';sh.inv={email,role:sh.role};sh.email=''}
   catch(e){sh.ok=false;sh.msg='Partage impossible : '+e.message}
   sh.busy=false;await gPerms()}
 async function gSetRole(pid,email,role){
@@ -1353,6 +1354,9 @@ async function gSetRole(pid,email,role){
   catch(e){toast('Modification impossible : '+e.message)}
   await gPerms()}
 const inviteLink=()=>location.origin+location.pathname+'?base='+G.dataId;
+const myName=()=>{let n='';try{n=localStorage.getItem('bdt-myname')||''}catch(e){}if(n)return n;const l=String(G.email||'').split('@')[0].replace(/[._-]+/g,' ').trim();return l?l.charAt(0).toUpperCase()+l.slice(1):'Un collègue'};
+const invSubject=()=>'Accès à la Base de données terrain';
+const invText=(email,role)=>`Bonjour,\n\n${myName()} t’invite à la Base de données terrain (${role==='writer'?'Éditeur : tu peux saisir et modifier':'Observateur : tu peux consulter'}).\n\nClique ici pour y accéder :\n${inviteLink()}\n\nConnecte-toi ensuite avec ton compte Google${email?' ('+email+')':''}.`;
 /* ---- déclencheurs ---- */
 let gT=null;
 function gChanged(){if(isRO())return;G.dirty=true;saveG();clearTimeout(gT);gT=setTimeout(()=>{if(tokOk())gSync(false)},8000)}
@@ -1379,15 +1383,23 @@ function viewShare(){
     !G.perms.length?'<p class="hint">Personne d’autre n’a accès pour l’instant.</p>':
     `<div style="display:grid;gap:8px">${G.perms.map(p=>`<div class="row" style="justify-content:space-between;border:1px solid var(--line);border-radius:10px;padding:8px 10px"><span><b>${esc(p.emailAddress||p.displayName||'?')}</b></span>
       <span class="row" style="gap:6px"><select data-prole="${esc(p.id)}" data-pmail="${esc(p.emailAddress||'')}" style="width:auto" ${ok?'':'disabled'}><option value="reader" ${p.role!=='writer'?'selected':''}>Observateur</option><option value="writer" ${p.role==='writer'?'selected':''}>Éditeur</option></select>
-      <button class="btn" data-prm="${esc(p.id)}" data-pmail="${esc(p.emailAddress||'')}" ${ok?'':'disabled'} style="color:var(--bad)">Retirer</button></span></div>`).join('')}</div>`;
+      <button class="btn" data-pinv="${esc(p.emailAddress||'')}" data-prl="${esc(p.role)}">Inviter</button><button class="btn" data-prm="${esc(p.id)}" data-pmail="${esc(p.emailAddress||'')}" ${ok?'':'disabled'} style="color:var(--bad)">Retirer</button></span></div>`).join('')}</div>`;
+  const iv=sh.inv,ivt=iv?invText(iv.email,iv.role):'';
+  const invPanel=iv?`<div class="banner" id="invpanel" style="display:block;margin:0 0 10px"><b>Invitation pour ${esc(iv.email)}</b>
+      <div style="white-space:pre-wrap;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;font-size:13px;color:var(--ink);overflow-wrap:anywhere">${esc(ivt)}</div>
+      <div class="row" style="gap:8px"><a class="btn pri" style="text-decoration:none" href="mailto:${encodeURIComponent(iv.email)}?subject=${encodeURIComponent(invSubject())}&body=${encodeURIComponent(ivt)}">Envoyer par e-mail</a>
+      <a class="btn" style="text-decoration:none" href="https://wa.me/?text=${encodeURIComponent(ivt)}" target="_blank" rel="noopener">WhatsApp</a>
+      ${navigator.share?'<button class="btn" id="invShare">Partager…</button>':''}<button class="btn" id="invCopy">Copier le message</button><button class="btn" id="invX">Fermer</button></div></div>`:'';
   return `<div class="card"><h2>Partager ma base</h2>
     <p style="margin:0 0 10px"><b>Observateur</b> : voit tout, ne peut rien saisir ni modifier. <b>Éditeur</b> : peut saisir et modifier. Tu peux changer le rôle ou retirer l’accès quand tu veux. Chacun se connecte avec <b>son propre</b> compte Google.</p>
     <div class="row" style="gap:8px;margin-bottom:10px"><input id="shMail" type="email" placeholder="adresse.gmail@gmail.com" value="${esc(sh.email)}" autocomplete="off" style="max-width:280px">
       <select id="shRole" style="width:auto"><option value="reader" ${sh.role==='reader'?'selected':''}>Observateur</option><option value="writer" ${sh.role==='writer'?'selected':''}>Éditeur</option></select>
       <button class="btn pri" id="shGo" ${sh.busy||!ok?'disabled':''}>Partager</button></div>
     ${sh.msg?`<div class="banner ${sh.ok?'':'err'}" style="margin-bottom:10px">${esc(sh.msg)}</div>`:''}
+    ${invPanel}
     ${list}
-    <p class="hint" style="margin:12px 0 4px">Lien d’invitation (envoyé aussi par e-mail par Google) :</p>
+    <div class="row" style="gap:8px;margin-top:12px"><label for="shName" style="margin:0">Ton nom dans les invitations :</label><input id="shName" value="${esc(myName())}" style="max-width:220px" autocomplete="off"></div>
+    <p class="hint" style="margin:12px 0 4px">Lien direct vers ta base :</p>
     <div class="row" style="gap:8px"><input id="shLink" readonly value="${esc(inviteLink())}" style="max-width:520px"><button class="btn" id="shCopy">Copier</button></div>
     <p class="hint" style="margin:10px 0 0">Tant que l’application est « en test » chez Google, ajoute aussi chaque adresse dans la console Google : Google Auth Platform → Audience → Utilisateurs test.</p></div>`}
 function viewSync(){
@@ -1413,6 +1425,12 @@ function wireSync(root){
   const m=$('#shMail');if(m){m.oninput=()=>{G.share.email=m.value};$('#shRole').onchange=e=>{G.share.role=e.target.value};$('#shGo').onclick=gShare;
     $('#shCopy').onclick=async()=>{try{await navigator.clipboard.writeText(inviteLink());toast('Lien copié')}catch(e){$('#shLink').select();toast('Sélectionne et copie le lien')}};
     root.querySelectorAll('[data-prole]').forEach(s=>s.onchange=()=>gSetRole(s.dataset.prole,s.dataset.pmail,s.value));
+    root.querySelectorAll('[data-pinv]').forEach(b=>b.onclick=()=>{G.share.inv={email:b.dataset.pinv,role:b.dataset.prl};G.share.msg='';render();const p=$('#invpanel');if(p)p.scrollIntoView({behavior:'smooth',block:'center'})});
+    const nm=$('#shName');if(nm)nm.onchange=()=>{try{localStorage.setItem('bdt-myname',nm.value.trim())}catch(e){}render()};
+    const iv=G.share.inv;if(iv){const t=invText(iv.email,iv.role);
+      $('#invCopy').onclick=async()=>{try{await navigator.clipboard.writeText(t);toast('Message copié')}catch(e){toast('Copie impossible')}};
+      $('#invX').onclick=()=>{G.share.inv=null;render()};
+      const sb=$('#invShare');if(sb)sb.onclick=async()=>{try{await navigator.share({title:invSubject(),text:t})}catch(e){}}}
     root.querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>{if(b.dataset.arm){gSetRole(b.dataset.prm,b.dataset.pmail,'remove')}else{b.dataset.arm='1';b.textContent='Confirmer'}});
     if(G.perms===null&&tokOk()&&!G._pl){G._pl=1;gPerms().finally(()=>{G._pl=0})}}
   if(document.querySelector('#syUrl'))wireSyncOld(root)}
